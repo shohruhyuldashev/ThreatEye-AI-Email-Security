@@ -2,6 +2,63 @@
 document.addEventListener('DOMContentLoaded', () => {
     const navButtons = document.querySelectorAll('.nav-btn');
     const viewContainer = document.getElementById('view-container');
+    const loginOverlay = document.getElementById('login-overlay');
+    const mainApp = document.getElementById('main-app-content');
+    const loginForm = document.getElementById('login-form');
+    const loginError = document.getElementById('login-error');
+
+    // Auth Initialization
+    function checkAuth() {
+        const isAuthenticated = localStorage.getItem('threat_eye_auth') === 'true';
+        if (isAuthenticated) {
+            loginOverlay.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                loginOverlay.classList.add('hidden');
+                mainApp.classList.remove('opacity-0', 'pointer-events-none');
+            }, 300);
+        } else {
+            loginOverlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
+            mainApp.classList.add('opacity-0', 'pointer-events-none');
+        }
+    }
+
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const user = document.getElementById('login-username').value;
+            const pass = document.getElementById('login-password').value;
+
+            // Simple validation against backend settings or default 'admin' / 'admin'
+            try {
+                const res = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+
+                if (res.ok) {
+                    localStorage.setItem('threat_eye_auth', 'true');
+                    loginError.classList.add('hidden');
+                    checkAuth();
+                } else {
+                    loginError.classList.remove('hidden');
+                }
+            } catch (err) {
+                // Fallback for local testing if backend endpoint doesn't exist yet
+                const savedPass = localStorage.getItem('threat_eye_local_pwd') || 'admin';
+                if (user === 'admin' && pass === savedPass) {
+                    localStorage.setItem('threat_eye_auth', 'true');
+                    loginError.classList.add('hidden');
+                    checkAuth();
+                } else {
+                    loginError.classList.remove('hidden');
+                }
+            }
+        });
+    }
+
+    // Run auth check
+    checkAuth();
 
     // Define the HTML content for each view
     const views = {
@@ -92,14 +149,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     <!-- Trend Chart -->
                     <div class="glass-card rounded-xl p-6 lg:col-span-2">
-                        <div class="flex justify-between items-center mb-4">
-                            <h3 class="text-lg font-semibold text-white">7-Day Threat Trend</h3>
-                            <select class="bg-cyber-dark border border-cyber-border text-xs rounded px-2 py-1 outline-none">
-                                <option>Last 7 Days</option>
-                                <option>Last 30 Days</option>
+                        <div class="flex justify-between items-center mb-4 border-b border-cyber-border/50 pb-2">
+                            <div class="flex items-center space-x-3">
+                                <h3 id="dashboard-trend-title" class="text-lg font-semibold text-white">7-Day Threat Trend</h3>
+                                <span id="dashboard-critical-badge" class="bg-cyber-danger/20 text-cyber-danger text-[10px] px-2 py-0.5 rounded font-bold uppercase tracking-wider hidden">Critical Activity</span>
+                            </div>
+                            <select id="dashboard-trend-range" class="bg-cyber-dark border border-cyber-border text-xs rounded px-2 py-1 outline-none text-gray-300 focus:border-cyber-neon cursor-pointer">
+                                <option value="7">7-Day</option>
+                                <option value="30">1 Month</option>
+                                <option value="90">3 Months</option>
+                                <option value="365">1 Year</option>
                             </select>
                         </div>
-                        <div class="h-64 w-full relative">
+                        <div class="h-64 w-full relative pt-2">
                             <canvas id="trendChart"></canvas>
                         </div>
                     </div>
@@ -152,71 +214,44 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <div class="glass-card rounded-xl overflow-hidden border border-cyber-border">
-                    <div class="overflow-x-auto min-h-[500px]">
-                        <table class="w-full text-left">
-                            <thead class="bg-cyber-dark/50 text-xs text-gray-400 uppercase tracking-wider">
-                                <tr>
-                                    <th class="py-4 px-6 font-medium">Timestamp</th>
-                                    <th class="py-4 px-6 font-medium">Sender</th>
-                                    <th class="py-4 px-6 font-medium">Subject</th>
-                                    <th class="py-4 px-6 font-medium">URL Threat</th>
-                                    <th class="py-4 px-6 font-medium">Overall Risk</th>
-                                    <th class="py-4 px-6 font-medium">Status</th>
-                                    <th class="py-4 px-6 font-medium"></th>
-                                </tr>
-                            </thead>
-                            <tbody class="text-sm divide-y divide-cyber-border/50" id="monitor-table-body">
-                                <!-- Standard mock row 1 -->
-                                <tr class="cyber-table-row group cursor-pointer">
-                                    <td class="py-4 px-6 text-gray-400">10:42 AM</td>
-                                    <td class="py-4 px-6">
-                                        <div class="font-medium text-white">hr-update@miicrosoft.com</div>
-                                        <div class="text-xs text-gray-500">External</div>
-                                    </td>
-                                    <td class="py-4 px-6 text-gray-300">URGENT: Mandatory Compliance Review</td>
-                                    <td class="py-4 px-6">
-                                        <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-cyber-danger mr-2"></span>98% (Typosquatting)</div>
-                                    </td>
-                                    <td class="py-4 px-6">
-                                        <div class="w-full bg-cyber-dark rounded-full h-1.5 mt-2">
-                                            <div class="bg-cyber-danger h-1.5 rounded-full" style="width: 95%"></div>
-                                        </div>
-                                        <span class="text-xs text-cyber-danger font-medium">95%</span>
-                                    </td>
-                                    <td class="py-4 px-6">
-                                        <span class="bg-cyber-danger/20 text-cyber-danger px-2.5 py-1 rounded border border-cyber-danger/30 text-xs">Quarantined</span>
-                                    </td>
-                                    <td class="py-4 px-6 text-right">
-                                        <button class="text-gray-500 hover:text-cyber-neon transition-colors"><i class="fa-solid fa-expand"></i></button>
-                                    </td>
-                                </tr>
-                                <!-- Standard mock row 2 -->
-                                <tr class="cyber-table-row group cursor-pointer">
-                                    <td class="py-4 px-6 text-gray-400">10:38 AM</td>
-                                    <td class="py-4 px-6">
-                                        <div class="font-medium text-white">john.doe@internal.com</div>
-                                        <div class="text-xs text-gray-500">Internal</div>
-                                    </td>
-                                    <td class="py-4 px-6 text-gray-300">Project Alpha status report</td>
-                                    <td class="py-4 px-6">
-                                        <div class="flex items-center"><span class="w-2 h-2 rounded-full bg-cyber-neon mr-2"></span>0%</div>
-                                    </td>
-                                    <td class="py-4 px-6">
-                                        <div class="w-full bg-cyber-dark rounded-full h-1.5 mt-2">
-                                            <div class="bg-cyber-neon h-1.5 rounded-full" style="width: 5%"></div>
-                                        </div>
-                                        <span class="text-xs text-cyber-neon font-medium">5%</span>
-                                    </td>
-                                    <td class="py-4 px-6">
-                                        <span class="bg-cyber-neon/10 text-cyber-neon px-2.5 py-1 rounded border border-cyber-neon/20 text-xs">Allowed</span>
-                                    </td>
-                                    <td class="py-4 px-6 text-right">
-                                        <button class="text-gray-500 hover:text-cyber-neon transition-colors"><i class="fa-solid fa-expand"></i></button>
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <!-- Data Table -->
+                    <div class="lg:col-span-2 glass-card rounded-xl overflow-hidden border border-cyber-border">
+                        <div class="overflow-x-auto h-[600px] custom-scrollbar">
+                            <table class="w-full text-left">
+                                <thead class="bg-cyber-dark/50 text-xs text-gray-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
+                                    <tr>
+                                        <th class="py-4 px-6 font-medium">Timestamp</th>
+                                        <th class="py-4 px-6 font-medium">Sender</th>
+                                        <th class="py-4 px-6 font-medium">Subject</th>
+                                        <th class="py-4 px-6 font-medium">URL Threat</th>
+                                        <th class="py-4 px-6 font-medium">Overall Risk</th>
+                                        <th class="py-4 px-6 font-medium">Status</th>
+                                        <th class="py-4 px-6 font-medium"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="text-sm divide-y divide-cyber-border/50" id="monitor-table-body">
+                                    <!-- Items injected via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Detail View (Sidebar) -->
+                    <div class="glass-card rounded-xl border border-cyber-border p-5 flex flex-col h-[600px]">
+                        <h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2 flex justify-between items-center">
+                            <span>Threat Detail</span>
+                            <span class="text-xs font-normal text-gray-500 bg-cyber-dark px-2 py-1 rounded">Select a row</span>
+                        </h3>
+                        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4" id="monitor-detail-content">
+                            <div class="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">
+                                <i class="fa-solid fa-envelope-open-text text-4xl opacity-50"></i>
+                                <p class="text-sm text-center">Click on any email in the monitoring table to view its full AI analysis and headers.</p>
+                            </div>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-cyber-border space-y-2 hidden" id="monitor-detail-actions">
+                            <button class="w-full py-2 bg-cyber-danger/80 hover:bg-cyber-danger text-white rounded font-medium transition-colors shadow-lg shadow-cyber-danger/20">Delete Permanently</button>
+                            <button class="w-full py-2 bg-transparent border border-cyber-border text-gray-400 hover:text-white hover:border-gray-500 rounded font-medium transition-colors">Release to Inbox (Admin)</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -250,30 +285,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </tr>
                                 </thead>
                                 <tbody class="text-sm divide-y divide-cyber-border/50">
-                                    <tr class="cyber-table-row hover:bg-cyber-panel">
-                                        <td class="p-4">
-                                            <div class="text-white">finance@corp.com</div>
-                                            <div class="text-xs text-gray-500">From: ceo-alert@c0rp.com</div>
-                                        </td>
-                                        <td class="p-4"><span class="text-cyber-danger font-bold">99%</span></td>
-                                        <td class="p-4 text-xs text-gray-400 max-w-[200px] truncate">Sender domain typosquatting detected. Urgency triggers found.</td>
-                                        <td class="p-4 text-right space-x-2">
-                                            <button class="px-3 py-1 bg-cyber-panel border border-cyber-info/50 text-cyber-info rounded hover:bg-cyber-info/10 transition-colors text-xs">Review</button>
-                                            <button class="px-3 py-1 bg-cyber-panel border border-cyber-danger/50 text-cyber-danger rounded hover:bg-cyber-danger/10 transition-colors text-xs">Delete</button>
-                                        </td>
-                                    </tr>
-                                    <tr class="cyber-table-row hover:bg-cyber-panel cursor-pointer bg-cyber-panel/50 border-l-2 border-cyber-neon">
-                                        <td class="p-4">
-                                            <div class="text-white">marketing@corp.com</div>
-                                            <div class="text-xs text-gray-500">From: invoice@vendor.com</div>
-                                        </td>
-                                        <td class="p-4"><span class="text-cyber-warning font-bold">75%</span></td>
-                                        <td class="p-4 text-xs text-gray-400 max-w-[200px] truncate">Suspicious attachment format. Possible macro payload.</td>
-                                        <td class="p-4 text-right space-x-2">
-                                            <button class="px-3 py-1 bg-cyber-panel border border-cyber-info/50 text-cyber-info rounded hover:bg-cyber-info/10 transition-colors text-xs">Review</button>
-                                            <button class="px-3 py-1 bg-cyber-panel border border-cyber-danger/50 text-cyber-danger rounded hover:bg-cyber-danger/10 transition-colors text-xs">Delete</button>
-                                        </td>
-                                    </tr>
+                                    <!-- JS Injected rows -->
                                 </tbody>
                             </table>
                         </div>
@@ -282,30 +294,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <!-- Detail View -->
                     <div class="glass-card rounded-xl border border-cyber-border p-5 flex flex-col h-[600px]">
                         <h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2">Threat Detail</h3>
-                        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4">
-                            <div>
-                                <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">Subject</label>
-                                <div class="text-white font-medium bg-cyber-dark p-2 rounded border border-cyber-border">Invoice #884920 payment overdue</div>
-                            </div>
-                            <div>
-                                <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">Headers</label>
-                                <div class="text-xs text-gray-400 font-mono bg-cyber-dark p-2 rounded border border-cyber-border break-all">
-                                    Return-Path: &lt;invoice@vendor.com&gt;<br>
-                                    Received: from mail.vendor.com (unknown [192.168.1.5])
-                                </div>
-                            </div>
-                            <div>
-                                <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">AI Analysis Log</label>
-                                <div class="text-sm text-gray-300 bg-cyber-danger/10 border border-cyber-danger/30 p-3 rounded">
-                                    <i class="fa-solid fa-robot text-cyber-danger mr-2"></i> 
-                                    Email contains manipulative language requesting urgent payment. The attached link redirects to an unknown IP rather than a recognized payment gateway. Risk score evaluated at 75%.
-                                </div>
-                            </div>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-cyber-border space-y-2">
-                            <button class="w-full py-2 bg-cyber-danger/80 hover:bg-cyber-danger text-white rounded font-medium transition-colors shadow-lg shadow-cyber-danger/20">Delete Permanently</button>
-                            <button class="w-full py-2 bg-transparent border border-cyber-border text-gray-400 hover:text-white hover:border-gray-500 rounded font-medium transition-colors">Release to Inbox (Admin)</button>
-                        </div>
+                        <p class="text-gray-500 text-sm">Select an item to view details</p>
                     </div>
                 </div>
             </div>
@@ -331,9 +320,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="flex items-center justify-between mb-6 pb-4 border-b border-cyber-border">
                             <h3 class="text-lg font-semibold text-white">Simulation Engine</h3>
                             <!-- Toggle switch -->
-                            <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in" title="Delay Mode">
-                                <input type="checkbox" name="toggle" id="delayToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600 transition-all z-10" checked/>
-                                <label for="delayToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-cyber-neon cursor-pointer transition-colors"></label>
+                            <div class="relative inline-block w-12 h-6 align-middle select-none transition duration-200 ease-in" title="Engine Toggle">
+                                <input type="checkbox" name="toggle" id="engineToggle" class="toggle-checkbox absolute block w-6 h-6 rounded-full bg-white border-4 appearance-none cursor-pointer border-gray-600 transition-all z-10" checked/>
+                                <label for="engineToggle" class="toggle-label block overflow-hidden h-6 rounded-full bg-cyber-neon cursor-pointer transition-colors"></label>
                             </div>
                         </div>
 
@@ -359,6 +348,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <option value="high_risk">High Risk Users</option>
                                         <option value="sales">Sales Department</option>
                                     </select>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-300 mb-2">Target Emails (.txt or .csv)</label>
+                                    <input type="file" id="sim-ai-target-file" accept=".txt,.csv" class="cyber-input w-full rounded-lg px-4 py-2 text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-cyber-neon/20 file:text-cyber-neon hover:file:bg-cyber-neon/30 cursor-pointer">
                                 </div>
                             </div>
 
@@ -402,38 +396,9 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button class="mt-4 px-4 py-1.5 bg-cyber-panel border border-gray-600 hover:border-white text-sm text-white rounded transition-colors" onclick="triggerSimulation()">Trigger Now <i class="fa-solid fa-play ml-1"></i></button>
                         </div>
 
-                        <div class="glass-card rounded-xl p-6">
-                            <h3 class="text-lg font-semibold text-white mb-4">Last Campaign Results</h3>
-                            <div class="space-y-4">
-                                <div>
-                                    <div class="flex justify-between text-sm mb-1">
-                                        <span class="text-gray-300">Emails Sent</span>
-                                        <span class="text-white font-medium">100</span>
-                                    </div>
-                                    <div class="w-full bg-cyber-dark rounded-full h-1.5"><div class="bg-gray-500 h-1.5 rounded-full" style="width: 100%"></div></div>
-                                </div>
-                                <div>
-                                    <div class="flex justify-between text-sm mb-1">
-                                        <span class="text-gray-300">Opened</span>
-                                        <span class="text-cyber-info font-medium">45</span>
-                                    </div>
-                                    <div class="w-full bg-cyber-dark rounded-full h-1.5"><div class="bg-cyber-info h-1.5 rounded-full" style="width: 45%"></div></div>
-                                </div>
-                                <div>
-                                    <div class="flex justify-between text-sm mb-1">
-                                        <span class="text-gray-300">Clicked Link</span>
-                                        <span class="text-cyber-warning font-medium">12</span>
-                                    </div>
-                                    <div class="w-full bg-cyber-dark rounded-full h-1.5"><div class="bg-cyber-warning h-1.5 rounded-full" style="width: 12%"></div></div>
-                                </div>
-                                <div>
-                                    <div class="flex justify-between text-sm mb-1">
-                                        <span class="text-gray-300">Submitted Data</span>
-                                        <span class="text-cyber-danger font-medium">3</span>
-                                    </div>
-                                    <div class="w-full bg-cyber-dark rounded-full h-1.5"><div class="bg-cyber-danger h-1.5 rounded-full" style="width: 3%"></div></div>
-                                </div>
-                            </div>
+                        <div class="glass-card rounded-xl p-6" id="dashboard-sim-results">
+                            <!-- Dynamics injected via JS when sim resolves -->
+                            <div class="flex items-center justify-center h-full text-gray-500 text-sm">Waiting for campaigns to stream...</div>
                         </div>
                     </div>
                 </div>
@@ -444,37 +409,40 @@ document.addEventListener('DOMContentLoaded', () => {
                  <div class="max-w-4xl mx-auto mt-10 text-center">
                     <i class="fa-solid fa-link text-4xl text-cyber-neon mb-4"></i>
                     <h2 class="text-3xl font-bold text-white mb-2">Deep URL Threat Analyzer</h2>
-                    <p class="text-gray-400 mb-8">Scan any URL for typosquatting, hidden redirections, and known malicious domains using the AI Engine.</p>
+                    <p class="text-gray-400 mb-6">Scan any URL for typosquatting, hidden redirections, and known malicious domains using the AI Engine.</p>
                     
+                    <!-- URL Mode Selector Tabs -->
+                    <div class="flex max-w-sm mx-auto bg-cyber-dark rounded-lg p-1 mb-8">
+                        <button type="button" id="url-mode-ai" class="flex-1 py-1.5 text-sm font-medium rounded-md bg-cyber-neon/20 text-cyber-neon transition-colors" onclick="switchUrlMode('AI')">AI Analyzer</button>
+                        <button type="button" id="url-mode-os" class="flex-1 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-white transition-colors" onclick="switchUrlMode('OpenSource')">OpenSource</button>
+                    </div>
+
                     <div class="relative max-w-2xl mx-auto flex mb-12">
                         <div class="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
                             <i class="fa-solid fa-globe text-gray-500 text-lg"></i>
                         </div>
                         <input type="text" placeholder="https://example-login.com/auth..." class="cyber-input w-full rounded-l-xl pl-12 pr-4 py-4 text-lg focus:shadow-[0_0_20px_rgba(0,255,157,0.2)]">
-                        <button class="bg-cyber-neon text-black font-bold px-8 py-4 rounded-r-xl hover:bg-[#00cc7a] transition-colors whitespace-nowrap">
+                        <button id="url-scan-btn" class="bg-cyber-neon text-black font-bold px-8 py-4 rounded-r-xl hover:bg-[#00cc7a] transition-colors whitespace-nowrap">
                             Scan URL
                         </button>
                     </div>
 
-                    <!-- Scan Results (Mock) -->
-                    <div class="glass-card rounded-xl text-left border-t-4 border-t-cyber-danger overflow-hidden text-sm">
+                    <!-- Scan Results (Dynamic) -->
+                    <div id="url-scan-result-card" class="glass-card rounded-xl text-left border-t-4 overflow-hidden text-sm" style="display: none;">
                         <div class="bg-cyber-dark/50 p-4 border-b border-cyber-border flex justify-between items-center">
-                            <span class="font-mono text-gray-300">https://micosoft-login-secure.com/auth</span>
-                            <span class="bg-cyber-danger/20 text-cyber-danger px-3 py-1 rounded-full font-bold">98% MALICIOUS</span>
+                            <span class="font-mono text-gray-300" id="url-scan-result-text"></span>
+                            <span id="url-scan-badge" class="px-3 py-1 rounded-full font-bold"></span>
                         </div>
                         <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
                             <div>
-                                <h4 class="text-white font-medium mb-3 border-b border-cyber-border pb-1">AI Findings</h4>
-                                <ul class="space-y-2 text-gray-400">
-                                    <li><i class="fa-solid fa-xmark text-cyber-danger mr-2"></i> <strong>Typosquatting:</strong> "micosoft" targets "microsoft"</li>
-                                    <li><i class="fa-solid fa-xmark text-cyber-danger mr-2"></i> <strong>Domain Age:</strong> Registered 2 days ago</li>
-                                    <li><i class="fa-solid fa-check text-cyber-neon mr-2"></i> <strong>SSL:</strong> Valid (Let's Encrypt)</li>
+                                <h4 id="url-scan-findings-title" class="text-white font-medium mb-3 border-b border-cyber-border pb-1">Findings</h4>
+                                <ul id="url-scan-findings-list" class="space-y-2 text-gray-400">
                                 </ul>
                             </div>
-                            <div>
+                            <div id="url-scan-resolution-div">
                                 <h4 class="text-white font-medium mb-3 border-b border-cyber-border pb-1">Resolution Strategy</h4>
-                                <p class="text-gray-400 mb-2">The AI assesses this domain is specifically engineered for credential harvesting. Automatically blocking at DNS level via firewall.</p>
-                                <button class="text-xs border border-cyber-danger text-cyber-danger px-3 py-1 rounded hover:bg-cyber-danger/10 transition-colors">Add to Global Blocklist</button>
+                                <p id="url-scan-resolution-desc" class="text-gray-400 mb-2"></p>
+                                <div id="url-scan-resolution-action"></div>
                             </div>
                         </div>
                     </div>
@@ -499,28 +467,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <!-- Department Heatmap / Table -->
                     <div class="glass-card rounded-xl p-6">
                         <h3 class="text-lg font-semibold text-white mb-4">Department Vulnerability</h3>
-                        <div class="space-y-4">
-                            <div class="bg-cyber-dark p-3 rounded flex justify-between items-center border-l-4 border-cyber-danger">
-                                <div>
-                                    <div class="text-white font-medium">Sales</div>
-                                    <div class="text-xs text-gray-500">24 incidents this week</div>
-                                </div>
-                                <span class="text-cyber-danger font-bold text-lg">High</span>
-                            </div>
-                            <div class="bg-cyber-dark p-3 rounded flex justify-between items-center border-l-4 border-cyber-warning">
-                                <div>
-                                    <div class="text-white font-medium">Finance</div>
-                                    <div class="text-xs text-gray-500">12 incidents this week</div>
-                                </div>
-                                <span class="text-cyber-warning font-bold text-lg">Med</span>
-                            </div>
-                            <div class="bg-cyber-dark p-3 rounded flex justify-between items-center border-l-4 border-cyber-neon">
-                                <div>
-                                    <div class="text-white font-medium">Engineering</div>
-                                    <div class="text-xs text-gray-500">2 incidents this week</div>
-                                </div>
-                                <span class="text-cyber-neon font-bold text-lg">Low</span>
-                            </div>
+                        <div class="space-y-4" id="analytics-dept-list">
+                            <!-- JS Injected rows -->
                         </div>
                     </div>
                 </div>
@@ -592,13 +540,85 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
 
-                        <div class="flex justify-end mt-4">
+                        <div class="glass-card rounded-xl p-6">
+                            <h3 class="text-lg font-medium text-white mb-4 flex items-center"><i class="fa-solid fa-lock mr-2 text-cyber-danger"></i> System Authentication</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-xs text-gray-400 uppercase tracking-widest mb-1">Current Password</label>
+                                    <input type="password" id="setting-auth-current" class="cyber-input w-full p-2 rounded text-sm" placeholder="••••••••">
+                                </div>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-1">New Password</label>
+                                        <input type="password" id="setting-auth-new" class="cyber-input w-full p-2 rounded text-sm" placeholder="••••••••">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-1">Confirm New Password</label>
+                                        <input type="password" id="setting-auth-confirm" class="cyber-input w-full p-2 rounded text-sm" placeholder="••••••••">
+                                    </div>
+                                </div>
+                                <button type="button" onclick="changeAdminPassword()" class="mt-2 text-xs bg-cyber-panel border border-cyber-border hover:border-cyber-danger text-white px-3 py-1.5 rounded transition-colors">Update Password</button>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between mt-4 border-t border-cyber-border/50 pt-4">
+                            <button onclick="logout()" class="text-sm text-gray-500 hover:text-cyber-danger transition-colors underline">Logout</button>
                             <button id="save-settings-btn" class="bg-cyber-neon text-black font-medium px-6 py-2 rounded shadow-[0_0_15px_rgba(0,255,157,0.3)] hover:bg-[#00cc7a] transition-all">Save All Configurations</button>
                         </div>
                     </div>
                 </div>
             </div>
         `
+    };
+
+    window.logout = function () {
+        localStorage.removeItem('threat_eye_auth');
+        window.location.reload();
+    };
+
+    window.changeAdminPassword = async function () {
+        const current = document.getElementById('setting-auth-current').value;
+        const newPass = document.getElementById('setting-auth-new').value;
+        const confirmPass = document.getElementById('setting-auth-confirm').value;
+
+        if (!current || !newPass || !confirmPass) {
+            return showCustomAlert("Please fill in all password fields.", "Validation Error", true);
+        }
+        if (newPass !== confirmPass) {
+            return showCustomAlert("New passwords do not match.", "Validation Error", true);
+        }
+
+        try {
+            const res = await fetch(`${API_BASE}/auth/change-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: current, new_password: newPass })
+            });
+
+            if (res.ok) {
+                showCustomAlert("Password successfully updated.", "Success", false);
+                document.getElementById('setting-auth-current').value = '';
+                document.getElementById('setting-auth-new').value = '';
+                document.getElementById('setting-auth-confirm').value = '';
+                // Update local fallback just in case
+                localStorage.setItem('threat_eye_local_pwd', newPass);
+            } else {
+                const data = await res.json();
+                showCustomAlert(data.detail || "Failed to update password.", "Error", true);
+            }
+        } catch (e) {
+            // Local fallback logic
+            const savedPass = localStorage.getItem('threat_eye_local_pwd') || 'admin';
+            if (current === savedPass) {
+                localStorage.setItem('threat_eye_local_pwd', newPass);
+                showCustomAlert("Password updated (Local Mode).", "Success", false);
+                document.getElementById('setting-auth-current').value = '';
+                document.getElementById('setting-auth-new').value = '';
+                document.getElementById('setting-auth-confirm').value = '';
+            } else {
+                showCustomAlert("Incorrect current password.", "Error", true);
+            }
+        }
     };
 
     // Keep track of charts
@@ -637,13 +657,38 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-                // Make the Quarantine card clickable
-                const quarantineCard = document.querySelector('#dashboard-view .border-t-cyber-danger');
-                if (quarantineCard) {
-                    quarantineCard.style.cursor = 'pointer';
-                    quarantineCard.addEventListener('click', () => {
-                        switchView('quarantine');
+                // Make dashboard stat cards clickable
+                const totalEmailsCard = document.querySelector('#dashboard-view .glass-card.border-t-cyber-info');
+                if (totalEmailsCard) {
+                    totalEmailsCard.classList.add('cursor-pointer', 'hover:bg-cyber-dark/80', 'transition-colors');
+                    totalEmailsCard.addEventListener('click', () => switchView('monitoring'));
+                }
+
+                const suspiciousCard = document.querySelector('#dashboard-view .glass-card.border-t-cyber-warning');
+                if (suspiciousCard) {
+                    suspiciousCard.classList.add('cursor-pointer', 'hover:bg-cyber-dark/80', 'transition-colors');
+                    suspiciousCard.addEventListener('click', () => {
+                        switchView('monitoring');
+                        setTimeout(() => {
+                            const riskFilter = document.getElementById('monitor-risk-filter');
+                            if (riskFilter) {
+                                riskFilter.value = 'suspicious';
+                                riskFilter.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }, 100);
                     });
+                }
+
+                const quarantineCard = document.querySelector('#dashboard-view .glass-card.border-t-cyber-danger');
+                if (quarantineCard) {
+                    quarantineCard.classList.add('cursor-pointer', 'hover:bg-cyber-dark/80', 'transition-colors');
+                    quarantineCard.addEventListener('click', () => switchView('quarantine'));
+                }
+
+                const simCard = document.querySelector('#dashboard-view .glass-card.border-t-cyber-neon');
+                if (simCard) {
+                    simCard.classList.add('cursor-pointer', 'hover:bg-cyber-dark/80', 'transition-colors');
+                    simCard.addEventListener('click', () => switchView('simulation'));
                 }
             } else if (target === 'monitoring') {
                 loadMonitoringEmails();
@@ -651,10 +696,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 loadQuarantineEmails();
             } else if (target === 'analytics') {
                 initAnalyticsCharts();
-            } else if (target === 'urlanalyzer') {
-                setupURLAnalyzer();
             } else if (target === 'simulation') {
                 setupSimulationTriggers();
+                loadActiveSimulations(); // Call the new function here
             } else if (target === 'settings') {
                 setupSettings();
             }
@@ -795,24 +839,38 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    window.handleQuarantineAction = async function (action, qId) {
+    window.handleQuarantineAction = async function (action, emailId) {
         if (action === 'delete') {
             const confirmed = await showCustomConfirm("Are you sure you want to permanently delete this email?");
             if (confirmed) {
-                await fetch(`${API_BASE}/quarantine/${qId}`, { method: 'DELETE' });
+                await fetch(`${API_BASE}/emails/${emailId}`, { method: 'DELETE' });
                 loadQuarantineEmails();
                 loadDashboardStats();
+                // Also remove it from Monitor array locally so it disappears until SSE refreshes
+                if (window.monitorEmailsRef) {
+                    window.monitorEmailsRef = window.monitorEmailsRef.filter(e => e.id != emailId);
+                    const tbody = document.getElementById('monitor-table-body');
+                    if (tbody) tbody.innerHTML = window.monitorEmailsRef.map(/* ... */); // let SSE or manual click handle full refresh, just reloading is fine
+                }
                 document.querySelector('#quarantine-view .glass-card:last-child').innerHTML = '<h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2">Threat Detail</h3><p class="text-gray-500 text-sm">Select an item to view details</p>';
+                document.querySelector('#monitoring-view .glass-card:last-child').innerHTML = '<h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2">Threat Detail</h3><p class="text-gray-500 text-sm">Select an item to view details</p>';
+
+                // Switch back focus
+                if (window.currentView === 'monitoring') loadMonitoringEmails();
             }
         } else if (action === 'release') {
             try {
-                const res = await fetch(`${API_BASE}/quarantine/${qId}/release`, { method: 'POST' });
+                const res = await fetch(`${API_BASE}/emails/${emailId}/release`, { method: 'POST' });
                 if (res.ok) {
                     await showCustomAlert("Email released to user inbox.", "Success");
                     loadQuarantineEmails();
                     loadDashboardStats();
-                    const detailCard = document.querySelector('#quarantine-view .glass-card:last-child');
-                    if (detailCard) detailCard.innerHTML = '<h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2">Threat Detail</h3><p class="text-gray-500 text-sm">Select an item to view details</p>';
+                    if (window.currentView === 'monitoring') loadMonitoringEmails();
+
+                    const detailCardQ = document.querySelector('#quarantine-view .glass-card:last-child');
+                    if (detailCardQ) detailCardQ.innerHTML = '<h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2">Threat Detail</h3><p class="text-gray-500 text-sm">Select an item to view details</p>';
+                    const detailCardM = document.querySelector('#monitoring-view .glass-card:last-child');
+                    if (detailCardM) detailCardM.innerHTML = '<h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2">Threat Detail</h3><p class="text-gray-500 text-sm">Select an item to view details</p>';
                 } else {
                     await showCustomAlert("Failed to release email.", "Error", true);
                 }
@@ -873,37 +931,40 @@ document.addEventListener('DOMContentLoaded', () => {
                             const statusColor = r.status === 'Quarantined' ? 'bg-cyber-danger/20 text-cyber-danger border border-cyber-danger/30' : 'bg-cyber-neon/10 text-cyber-neon border border-cyber-neon/20';
 
                             return `
-                            <tr class="cyber-table-row group cursor-pointer monitor-row border-l-2 border-transparent hover:border-cyber-neon transition-colors animate-pulse" data-sender="${r.sender.toLowerCase()}" data-subject="${r.subject.toLowerCase()}" data-risk="${r.risk_score}">
-                                <td class="py-4 px-6 text-cyber-neon font-medium">${timeStr}</td>
-                                <td class="py-4 px-6">
-                                    <div class="font-medium text-white truncate max-w-[250px]">${r.sender}</div>
-                                    <div class="text-xs ${isInternal ? 'text-cyber-info' : 'text-gray-500'}">${isInternal ? 'Internal' : 'External'}</div>
-                                </td>
-                                <td class="py-4 px-6 text-gray-300 truncate max-w-[300px]">${r.subject}</td>
-                                <td class="py-4 px-6">
-                                    <div class="flex items-center">
-                                        <span class="w-2 h-2 rounded-full ${r.url_threat_score > 50 ? 'bg-cyber-danger' : 'bg-cyber-neon'} mr-2"></span>
-                                        ${r.url_threat_score}%
-                                    </div>
-                                </td>
-                                <td class="py-4 px-6">
-                                    <div class="w-full bg-cyber-dark rounded-full h-1.5 mt-2">
-                                        <div class="${isDanger ? 'bg-cyber-danger' : 'bg-cyber-neon'} h-1.5 rounded-full" style="width: ${r.risk_score}%"></div>
-                                    </div>
-                                    <span class="text-xs ${isDanger ? 'text-cyber-danger' : 'text-cyber-neon'} font-medium">${r.risk_score}%</span>
-                                </td>
-                                <td class="py-4 px-6">
-                                    <span class="${statusColor} px-2.5 py-1 rounded text-xs">${r.status}</span>
-                                </td>
-                                <td class="py-4 px-6 text-right">
-                                    <button class="text-gray-500 hover:text-cyber-neon transition-colors"><i class="fa-solid fa-expand"></i></button>
-                                </td>
-                            </tr>
-                            `;
+                        <tr class="cyber-table-row group cursor-pointer monitor-row border-l-2 border-transparent hover:border-cyber-neon transition-colors animate-pulse" data-id="${r.id}" data-sender="${r.sender.toLowerCase()}" data-subject="${r.subject.toLowerCase()}" data-risk="${r.risk_score}">
+                            <td class="py-4 px-6 text-cyber-neon font-medium">${timeStr}</td>
+                            <td class="py-4 px-6">
+                                <div class="font-medium text-white truncate max-w-[250px]">${r.sender}</div>
+                                <div class="text-xs ${isInternal ? 'text-cyber-info' : 'text-gray-500'}">${isInternal ? 'Internal' : 'External'}</div>
+                            </td>
+                            <td class="py-4 px-6 text-gray-300 truncate max-w-[300px]">${r.subject}</td>
+                            <td class="py-4 px-6">
+                                <div class="flex items-center">
+                                    <span class="w-2 h-2 rounded-full ${r.url_threat_score > 50 ? 'bg-cyber-danger' : 'bg-cyber-neon'} mr-2"></span>
+                                    ${r.url_threat_score}%
+                                </div>
+                            </td>
+                            <td class="py-4 px-6">
+                                <div class="w-full bg-cyber-dark rounded-full h-1.5 mt-2">
+                                    <div class="${isDanger ? 'bg-cyber-danger' : 'bg-cyber-neon'} h-1.5 rounded-full" style="width: ${r.risk_score}%"></div>
+                                </div>
+                                <span class="text-xs ${isDanger ? 'text-cyber-danger' : 'text-cyber-neon'} font-medium">${r.risk_score}%</span>
+                            </td>
+                            <td class="py-4 px-6">
+                                <span class="${statusColor} px-2.5 py-1 rounded text-xs">${r.status}</span>
+                            </td>
+                            <td class="py-4 px-6 text-right">
+                                <button class="text-gray-500 hover:text-cyber-neon transition-colors"><i class="fa-solid fa-expand"></i></button>
+                            </td>
+                        </tr>
+                        `;
                         }).join('');
 
                         // Use insertAdjacentHTML to prepend instead of overwriting
                         tbody.insertAdjacentHTML('afterbegin', rowsHTML);
+
+                        // Add click listeners to new rows directly
+                        bindMonitorRowClicks();
 
                         // Apply filters to ensure newly added row adheres to current UI search/select state
                         applyMonitorFilters();
@@ -946,7 +1007,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (alerts.length > 0) {
                     notifBadge.classList.remove('hidden');
                     notifList.innerHTML = alerts.map(a => `
-                        <li class="p-3 border-b border-cyber-border/50 hover:bg-cyber-panel/50 cursor-pointer transition-colors">
+                        <li class="p-3 border-b border-cyber-border/50 hover:bg-cyber-panel/50 cursor-pointer transition-colors" onclick="switchView('${a.details.toLowerCase().includes('quarantine') ? 'quarantine' : 'monitoring'}')">
                             <div class="flex items-start">
                                 <i class="fa-solid fa-triangle-exclamation text-cyber-danger mt-1 mr-3"></i>
                                 <div>
@@ -992,6 +1053,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     gaugeValueEl.className = 'text-4xl font-bold text-cyber-warning';
                 } else {
                     gaugeValueEl.className = 'text-4xl font-bold text-cyber-danger';
+                }
+            }
+
+            // Update Sidebar Quarantine Count Badge
+            const qBadge = document.getElementById('sidebar-quarantine-count');
+            if (qBadge) {
+                const qCount = parseInt(data.quarantined_emails) || 0;
+                if (qCount > 0) {
+                    qBadge.innerText = qCount;
+                    qBadge.classList.remove('hidden');
+                } else {
+                    qBadge.classList.add('hidden');
                 }
             }
 
@@ -1045,23 +1118,25 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await fetch(`${API_BASE}/emails?limit=50`);
             const emails = await res.json();
+            window.monitorEmailsRef = emails; // store for easy access
+
             const tbody = document.getElementById('monitor-table-body');
             if (!tbody) return;
 
             if (emails.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-500 text-lg">No incoming emails tracked yet. Waiting for inbox events...</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="py-12 text-center text-gray-500">No incoming emails monitored yet.</td></tr>';
                 return;
             }
 
             tbody.innerHTML = emails.map(r => {
                 const dateObj = new Date(r.timestamp + 'Z');
                 const timeStr = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const isInternal = r.sender.includes('company') || r.sender.includes('internal');
+                const isInternal = r.sender.includes('internal.com') || r.sender.includes('corp.com');
                 const isDanger = r.risk_score > 70 || r.url_threat_score > 70;
                 const statusColor = r.status === 'Quarantined' ? 'bg-cyber-danger/20 text-cyber-danger border border-cyber-danger/30' : 'bg-cyber-neon/10 text-cyber-neon border border-cyber-neon/20';
 
                 return `
-                <tr class="cyber-table-row group cursor-pointer monitor-row" data-sender="${r.sender.toLowerCase()}" data-subject="${r.subject.toLowerCase()}" data-risk="${r.risk_score}">
+                <tr class="cyber-table-row group cursor-pointer monitor-row border-l-2 border-transparent hover:border-cyber-neon transition-colors" data-id="${r.id}" data-sender="${r.sender.toLowerCase()}" data-subject="${r.subject.toLowerCase()}" data-risk="${r.risk_score}">
                     <td class="py-4 px-6 text-gray-400">${timeStr}</td>
                     <td class="py-4 px-6">
                         <div class="font-medium text-white truncate max-w-[250px]">${r.sender}</div>
@@ -1092,9 +1167,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Apply current filters if any
             applyMonitorFilters();
+            bindMonitorRowClicks();
+
         } catch (error) {
             console.error("Failed to load monitoring emails:", error);
         }
+    }
+
+    function bindMonitorRowClicks() {
+        document.querySelectorAll('#monitor-table-body .cyber-table-row').forEach(row => {
+            // Remove old listener if exists to prevent duplicates (though typically we redraw)
+            const newRow = row.cloneNode(true);
+            row.parentNode.replaceChild(newRow, row);
+
+            newRow.addEventListener('click', () => {
+                const rowId = newRow.getAttribute('data-id');
+                const emails = window.monitorEmailsRef || [];
+                const item = emails.find(e => e.id == rowId);
+
+                if (item) {
+                    const detailContent = document.getElementById('monitor-detail-content');
+                    const detailActions = document.getElementById('monitor-detail-actions');
+
+                    if (detailContent && detailActions) {
+                        const isMalicious = item.risk_score > 70;
+                        const iconColor = isMalicious ? 'text-cyber-danger' : 'text-cyber-neon';
+                        const bgColor = isMalicious ? 'bg-cyber-danger/10 border-cyber-danger/30' : 'bg-cyber-neon/10 border-cyber-neon/30';
+
+                        detailContent.innerHTML = `
+                            <div>
+                                <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">Subject</label>
+                                <div class="text-white font-medium bg-cyber-dark p-2 rounded border border-cyber-border">${item.subject || 'No Subject'}</div>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">Sender</label>
+                                <div class="text-xs text-gray-400 font-mono bg-cyber-dark p-2 rounded border border-cyber-border break-all">
+                                    Return-Path: &lt;${item.sender}&gt;
+                                </div>
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-500 uppercase tracking-wider block mb-1">Risk Assessment</label>
+                                <div class="text-sm text-gray-300 ${bgColor} border p-3 rounded">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="font-bold flex items-center"><i class="fa-solid fa-robot ${iconColor} mr-2"></i> Overall Score: ${item.risk_score}%</span>
+                                        <span class="text-xs px-2 rounded ${item.status === 'Quarantined' ? 'bg-cyber-danger text-white' : 'bg-cyber-neon text-black'}">${item.status}</span>
+                                    </div>
+                                    <div class="text-xs mt-2 border-t border-gray-600/50 pt-2 break-words">
+                                        ${item.ai_analysis_log || 'Heuristic checks passed. No significant AI behavioral threats detected.'}
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+
+                        // Show/hide actions based on status
+                        if (item.status === 'Quarantined') {
+                            detailActions.classList.remove('hidden');
+                            // Clear old handlers
+                            detailActions.innerHTML = `
+                                <button onclick="handleQuarantineAction('delete', ${item.id})" class="w-full py-2 bg-cyber-danger/80 hover:bg-cyber-danger text-white rounded font-medium transition-colors shadow-lg shadow-cyber-danger/20">Delete Permanently</button>
+                                <button onclick="handleQuarantineAction('release', ${item.id})" class="w-full py-2 bg-transparent border border-cyber-border text-gray-400 hover:text-white hover:border-gray-500 rounded font-medium transition-colors">Release to Inbox (Admin)</button>
+                            `;
+                        } else {
+                            detailActions.classList.add('hidden');
+                        }
+                    }
+                }
+            });
+        });
     }
 
     // Front-end filter logic for Monitor Table
@@ -1140,6 +1279,17 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('change', (e) => {
         if (e.target.id === 'monitor-risk-filter') {
             applyMonitorFilters();
+        } else if (e.target.id === 'dashboard-trend-range') {
+            const days = parseInt(e.target.value) || 7;
+            const titleMap = {
+                7: '7-Day Threat Trend',
+                30: '1-Month Threat Trend',
+                90: '3-Month Threat Trend',
+                365: '1-Year Threat Trend'
+            };
+            const titleEl = document.getElementById('dashboard-trend-title');
+            if (titleEl) titleEl.innerText = titleMap[days];
+            loadDashboardStats(days);
         }
     });
 
@@ -1164,7 +1314,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const timeStr = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 return `
-                    <tr class="cyber-table-row hover:bg-cyber-panel cursor-pointer border-l-2 border-transparent" data-id="${item.quarantine_id}">
+                    <tr class="cyber-table-row hover:bg-cyber-panel cursor-pointer border-l-2 border-transparent" data-id="${item.id}">
                         <td class="p-4">
                             <div class="text-white">${item.recipient}</div>
                             <div class="text-xs text-gray-500">${timeStr}</div>
@@ -1177,8 +1327,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </td>
                         <td class="p-4">
                             <div class="flex space-x-2">
-                                <button data-action="release" data-id="${item.quarantine_id}" class="text-xs border border-cyber-border hover:border-cyber-neon text-gray-400 hover:text-cyber-neon px-3 py-1 rounded transition-colors quarantine-action-btn">Release</button>
-                                <button data-action="delete" data-id="${item.quarantine_id}" class="text-xs bg-cyber-danger/10 text-cyber-danger hover:bg-cyber-danger/20 px-3 py-1 rounded transition-colors quarantine-action-btn">Delete</button>
+                                <button data-action="release" data-id="${item.id}" class="text-xs border border-cyber-border hover:border-cyber-neon text-gray-400 hover:text-cyber-neon px-3 py-1 rounded transition-colors quarantine-action-btn">Release</button>
+                                <button data-action="delete" data-id="${item.id}" class="text-xs bg-cyber-danger/10 text-cyber-danger hover:bg-cyber-danger/20 px-3 py-1 rounded transition-colors quarantine-action-btn">Delete</button>
                             </div>
                         </td>
                     </tr>
@@ -1195,11 +1345,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             });
 
-            // Add Event Listeners for row click to show details
             document.querySelectorAll('#quarantine-view .cyber-table-row').forEach(row => {
                 row.addEventListener('click', () => {
-                    const qId = row.getAttribute('data-id');
-                    const item = qItems.find(i => i.quarantine_id == qId);
+                    const emailId = row.getAttribute('data-id');
+                    const item = qItems.find(i => i.id == emailId);
                     if (item) {
                         const detailView = document.querySelector('#quarantine-view .glass-card:last-child');
                         if (detailView) {
@@ -1224,9 +1373,8 @@ document.addEventListener('DOMContentLoaded', () => {
                                         </div>
                                     </div>
                                 </div>
-                                <div class="mt-4 pt-4 border-t border-cyber-border space-y-2">
-                                    <button onclick="handleQuarantineAction('delete', ${item.quarantine_id})" class="w-full py-2 bg-cyber-danger/80 hover:bg-cyber-danger text-white rounded font-medium transition-colors shadow-lg shadow-cyber-danger/20">Delete Permanently</button>
-                                    <button onclick="handleQuarantineAction('release', ${item.quarantine_id})" class="w-full py-2 bg-transparent border border-cyber-border text-gray-400 hover:text-white hover:border-gray-500 rounded font-medium transition-colors">Release to Inbox (Admin)</button>
+                                    <button onclick="handleQuarantineAction('delete', ${item.id})" class="w-full py-2 bg-cyber-danger/80 hover:bg-cyber-danger text-white rounded font-medium transition-colors shadow-lg shadow-cyber-danger/20">Delete Permanently</button>
+                                    <button onclick="handleQuarantineAction('release', ${item.id})" class="w-full py-2 bg-transparent border border-cyber-border text-gray-400 hover:text-white hover:border-gray-500 rounded font-medium transition-colors">Release to Inbox (Admin)</button>
                                 </div>
                             `;
                         }
@@ -1239,60 +1387,197 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function setupURLAnalyzer() {
-        const analyzeBtn = document.querySelector('#urlanalyzer-view button');
+    async function loadActiveSimulations() {
+        try {
+            const res = await fetch(`${API_BASE}/simulations/history`);
+            const data = await res.json();
+            const tbody = document.getElementById('sim-history-table');
+            if (!tbody) return;
+
+            if (data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-gray-500">No previous campaigns found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(camp => {
+                const statusColor = camp.status === 'Completed' ? 'bg-gray-800 text-gray-400' : 'bg-cyber-neon/10 text-cyber-neon border border-cyber-neon/30';
+
+                // Safety check for click rate in case it's not present natively yet
+                let clickRate = "0%";
+                if (camp.results && camp.results.clicked && camp.results.total) {
+                    clickRate = Math.round((camp.results.clicked / camp.results.total) * 100) + '%';
+                }
+
+                return `
+                    <tr class="hover:bg-cyber-dark/50 transition-colors">
+                        <td class="py-3">
+                            <div class="font-medium text-white text-sm">${camp.name}</div>
+                            <div class="text-xs text-gray-500">Launched: ${camp.launch_date || 'Unknown'}</div>
+                        </td>
+                        <td class="py-3">
+                            <span class="text-xs ${statusColor} px-2 py-0.5 rounded">${camp.status}</span>
+                        </td>
+                        <td class="py-3">
+                            <div class="text-xs text-cyber-danger">${clickRate}</div>
+                        </td>
+                        <td class="py-3 text-right">
+                            <button class="text-xs bg-cyber-panel border border-cyber-info/50 text-cyber-info px-2 py-1 rounded hover:bg-cyber-info/10 transition-colors">Report</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        } catch (error) {
+            console.error("Failed to load campaign history:", error);
+            const tbody = document.getElementById('sim-history-table');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-cyber-danger">Failed to load campaigns from API</td></tr>';
+        }
+    }
+
+    window.switchUrlMode = function (mode) {
+        window.currentUrlMode = mode;
+        const btnAI = document.getElementById('url-mode-ai');
+        const btnOS = document.getElementById('url-mode-os');
+
+        if (!btnAI || !btnOS) return;
+
+        [btnAI, btnOS].forEach(btn => {
+            btn.classList.remove('bg-cyber-neon/20', 'text-cyber-neon');
+            btn.classList.add('text-gray-400');
+        });
+
+        if (mode === 'AI') {
+            btnAI.classList.add('bg-cyber-neon/20', 'text-cyber-neon');
+            btnAI.classList.remove('text-gray-400', 'hover:text-white');
+            btnOS.classList.add('hover:text-white');
+        } else {
+            btnOS.classList.add('bg-cyber-neon/20', 'text-cyber-neon');
+            btnOS.classList.remove('text-gray-400', 'hover:text-white');
+            btnAI.classList.add('hover:text-white');
+        }
+    };
+
+    // URL Analyzer Logic (Event Delegation)
+    document.addEventListener('click', async (e) => {
+        const analyzeBtn = e.target.closest('#url-scan-btn');
+        if (!analyzeBtn) return;
+
         const inputField = document.querySelector('#urlanalyzer-view input');
         const resultSection = document.querySelector('#urlanalyzer-view .glass-card');
 
-        // Hide result initially
-        if (resultSection) resultSection.style.display = 'none';
+        if (!inputField) return;
 
-        if (analyzeBtn && inputField) {
-            analyzeBtn.addEventListener('click', async () => {
-                const url = inputField.value.trim();
-                if (!url) return;
+        const url = inputField.value.trim();
+        if (!url) return;
 
-                analyzeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning...';
-                analyzeBtn.disabled = true;
+        const originalText = analyzeBtn.innerHTML;
+        analyzeBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning...';
+        analyzeBtn.disabled = true;
 
-                try {
-                    const res = await fetch(`${API_BASE}/analyze-url`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ url: url })
-                    });
-                    const data = await res.json();
-
-                    if (resultSection) {
-                        // Update UI with response data
-                        const isMalicious = data.url_threat_score > 50 || data.phishing_score > 60;
-
-                        document.querySelector('#urlanalyzer-view .font-mono').innerText = url;
-                        document.querySelector('#urlanalyzer-view .font-bold.text-cyber-danger')?.remove();
-                        document.querySelector('#urlanalyzer-view .font-bold.text-cyber-neon')?.remove();
-
-                        const badgeEl = document.createElement('span');
-                        badgeEl.className = isMalicious ? 'bg-cyber-danger/20 text-cyber-danger px-3 py-1 rounded-full font-bold' : 'bg-cyber-neon/20 text-cyber-neon px-3 py-1 rounded-full font-bold';
-                        badgeEl.innerText = isMalicious ? `${data.url_threat_score}% RISK DETECTED` : `SAFE DOMAIN`;
-                        document.querySelector('#urlanalyzer-view .bg-cyber-dark\\/50').appendChild(badgeEl);
-
-                        const findingsList = document.querySelector('#urlanalyzer-view ul');
-                        findingsList.innerHTML = `
-                            <li><i class="fa-solid fa-robot ${isMalicious ? 'text-cyber-danger' : 'text-cyber-neon'} mr-2"></i> <strong>AI Insight:</strong> ${data.explanation}</li>
-                            <li><i class="fa-solid fa-link text-gray-400 mr-2"></i> <strong>Base Phishing Score:</strong> ${data.phishing_score}%</li>
-                         `;
-
-                        resultSection.style.display = 'block';
-                    }
-                } catch (e) {
-                    showCustomAlert("Analysis Failed. Ensure backend API is running.", "Error", true);
-                } finally {
-                    analyzeBtn.innerHTML = 'Scan URL';
-                    analyzeBtn.disabled = false;
-                }
+        try {
+            const mode = window.currentUrlMode || 'AI';
+            const res = await fetch(`${API_BASE}/analyze-url`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: url, mode: mode })
             });
+            const data = await res.json();
+
+            if (resultSection) {
+                // Update UI with response data
+                const score = data.phishing_score || data.url_threat_score || 0;
+
+                let riskLabel, riskColorClass, riskBorderClass, resolutionText, actionBtnHTML;
+                const actionTmpl = (msg, cls, title) => `<button onclick="showCustomAlert('${msg}', '${title}')" class="text-xs border border-${cls} text-${cls} px-3 py-1 rounded hover:bg-${cls}/10 transition-colors">`;
+
+                if (score <= 19) {
+                    riskLabel = "SAFE";
+                    riskColorClass = "text-cyber-neon bg-cyber-neon/20";
+                    riskBorderClass = "border-t-cyber-neon";
+                    resolutionText = "No significant threats detected. Traffic seems benign. Continue standard monitoring.";
+                    actionBtnHTML = actionTmpl('Domain marked as Trusted.', 'cyber-neon', 'Safe Domain') + 'Mark as Trusted</button>';
+                } else if (score <= 39) {
+                    riskLabel = "LOW RISK";
+                    riskColorClass = "text-cyber-info bg-cyber-info/20";
+                    riskBorderClass = "border-t-cyber-info";
+                    resolutionText = "Minor risk factors present. May be a newly registered domain or have generic keywords. Safe for general use but warrants observation.";
+                    actionBtnHTML = actionTmpl('Domain added to observation list.', 'cyber-info', 'Observation Mode') + 'Monitor Activity</button>';
+                } else if (score <= 59) {
+                    riskLabel = "SUSPICIOUS";
+                    riskColorClass = "text-cyber-warning bg-cyber-warning/20";
+                    riskBorderClass = "border-t-cyber-warning";
+                    resolutionText = "Domain contains suspicious combinations. Exercise caution before proceeding. Recommend visual inspection by SOC.";
+                    actionBtnHTML = actionTmpl('Flagged for Manual Review by incident response team.', 'cyber-warning', 'SOC Notification') + 'Send for Manual Review</button>';
+                } else if (score <= 79) {
+                    riskLabel = "HIGH RISK";
+                    riskColorClass = "text-orange-500 bg-orange-500/20";
+                    riskBorderClass = "border-t-orange-500";
+                    resolutionText = "Domain exhibits significant phishing tactics such as typosquatting or malicious keywords. Strongly recommend blocking access.";
+                    actionBtnHTML = actionTmpl('Domain added to Global Blocklist successfully.', 'orange-500', 'Blocked') + 'Block Domain</button>';
+                } else {
+                    riskLabel = "MALICIOUS";
+                    riskColorClass = "text-cyber-danger bg-cyber-danger/20";
+                    riskBorderClass = "border-t-cyber-danger";
+                    resolutionText = "High risk indicators present. The domain exhibits tactics definitively matched to credential harvesting or malware distribution. Block immediately.";
+                    actionBtnHTML = actionTmpl('Domain added to Global Blocklist successfully. Firewall rule deployed.', 'cyber-danger', 'Blocked') + 'Add to Global Blocklist</button>';
+                }
+
+                document.getElementById('url-scan-result-text').innerText = url;
+                const badgeEl = document.getElementById('url-scan-badge');
+                badgeEl.className = `${riskColorClass} px-3 py-1 rounded-full font-bold`;
+                badgeEl.innerText = `${score}% ${riskLabel}`;
+
+                resultSection.className = `glass-card rounded-xl text-left border-t-4 overflow-hidden text-sm ${riskBorderClass}`;
+
+                const findingsList = document.getElementById('url-scan-findings-list');
+                const isOSMode = mode === 'OpenSource';
+
+                if (isOSMode) {
+                    const domName = data.features?.domain_name || 'N/A';
+                    const reg = data.features?.registrar || 'Hidden / Privacy Protected';
+                    const created = data.features?.creation_date || 'Unknown';
+                    const expires = data.features?.expiration_date || 'Unknown';
+                    const age = data.features?.domain_age_days !== undefined && data.features?.domain_age_days >= 0 ? `${data.features.domain_age_days} Days` : 'Unknown';
+
+                    let extraIntel = '';
+                    if (data.features?.typosquatting_target) {
+                        extraIntel += `<li><i class="fa-solid fa-masks-theater text-cyber-danger mr-2"></i> <strong>Typosquatting:</strong> Spoofing <span class="text-cyber-danger">${data.features.typosquatting_target}</span></li>`;
+                    }
+                    if (data.features?.suspicious_keywords && data.features.suspicious_keywords.length > 0) {
+                        extraIntel += `<li><i class="fa-solid fa-magnifying-glass text-cyber-warning mr-2"></i> <strong>Risk Keywords:</strong> <span class="text-cyber-warning">${data.features.suspicious_keywords.join(', ')}</span></li>`;
+                    }
+                    if (data.features?.is_ip_based) {
+                        extraIntel += `<li><i class="fa-solid fa-network-wired text-cyber-danger mr-2"></i> <strong>IP-Based Host:</strong> Direct IP navigation is highly suspicious.</li>`;
+                    }
+
+                    findingsList.innerHTML = `
+                        <li><i class="fa-solid fa-server text-cyber-neon mr-2"></i> <strong>Target Domain:</strong> ${domName}</li>
+                        <li><i class="fa-solid fa-building text-cyber-neon mr-2"></i> <strong>Registrar:</strong> ${reg}</li>
+                        <li><i class="fa-solid fa-calendar-plus text-cyber-neon mr-2"></i> <strong>Creation Date:</strong> ${created} (Age: ${age})</li>
+                        <li><i class="fa-solid fa-calendar-minus text-cyber-neon mr-2"></i> <strong>Expiration Date:</strong> ${expires}</li>
+                        ${extraIntel}
+                        <li class="pt-2 mt-2 border-t border-cyber-border/50"><i class="fa-solid fa-shield-halved ${score >= 60 ? 'text-cyber-danger' : 'text-cyber-neon'} mr-2"></i> <strong>Heuristics Score:</strong> ${score}%</li>
+                    `;
+                    document.getElementById('url-scan-findings-title').innerText = "WHOIS Intelligence";
+                } else {
+                    findingsList.innerHTML = `
+                        <li><i class="fa-solid fa-robot ${score >= 60 ? 'text-cyber-danger' : 'text-cyber-neon'} mr-2"></i> <strong>AI Insight:</strong> ${data.explanation}</li>
+                        <li><i class="fa-solid fa-link text-gray-400 mr-2"></i> <strong>Base Phishing Score:</strong> ${score}%</li>
+                    `;
+                    document.getElementById('url-scan-findings-title').innerText = "AI Findings";
+                }
+
+                document.getElementById('url-scan-resolution-desc').innerText = resolutionText;
+                document.getElementById('url-scan-resolution-action').innerHTML = actionBtnHTML;
+
+                resultSection.style.display = 'block';
+            }
+        } catch (e) {
+            showCustomAlert("Analysis Failed. Ensure backend API is running.", "Error", true);
+        } finally {
+            analyzeBtn.innerHTML = originalText;
+            analyzeBtn.disabled = false;
         }
-    }
+    });
 
     function setupSimulationTriggers() {
         const triggerBtn = document.querySelector('#simulation-view button:last-of-type');
@@ -1340,10 +1625,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (dateInput && dateInput.value) {
                             formData.append('target_date', dateInput.value);
                         }
-                    }
-                    const delayToggle = document.getElementById('delayToggle');
-                    if (delayToggle) {
-                        formData.append('delay_mode', delayToggle.checked);
+                    } else if (mode === 'AI') {
+                        const fileInput = document.getElementById('sim-ai-target-file');
+                        if (fileInput && fileInput.files.length > 0) {
+                            formData.append('file', fileInput.files[0]);
+                        }
                     }
 
                     const res = await fetch(`${API_BASE}/simulations/trigger`, {
@@ -1379,6 +1665,45 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 800);
             }
         };
+
+        const engineToggle = document.getElementById('engineToggle');
+        if (engineToggle) {
+            engineToggle.addEventListener('change', async (e) => {
+                const isActive = e.target.checked;
+                const topContainer = document.getElementById('top-sim-container');
+                const topDot = document.getElementById('top-sim-dot');
+                const topText = document.getElementById('top-sim-text');
+
+                // Update Top Indicator
+                if (topContainer && topDot && topText) {
+                    if (isActive) {
+                        topContainer.className = "flex items-center space-x-2 bg-cyber-panel border border-cyber-info/30 px-3 py-1.5 rounded-full transition-colors";
+                        topDot.className = "w-2 h-2 rounded-full bg-cyber-info animate-pulse delay-75 transition-colors";
+                        topText.className = "text-xs font-medium text-cyber-info transition-colors";
+                        topText.innerText = "Simulations: Running";
+                    } else {
+                        topContainer.className = "flex items-center space-x-2 bg-cyber-panel border border-cyber-danger/30 px-3 py-1.5 rounded-full transition-colors";
+                        topDot.className = "w-2 h-2 rounded-full bg-cyber-danger transition-colors";
+                        topText.className = "text-xs font-medium text-cyber-danger transition-colors";
+                        topText.innerText = "Simulations: Stopped";
+                    }
+                }
+
+                // Save to backend settings implicitly
+                try {
+                    await fetch(`${API_BASE}/settings`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ "simulation_engine_active": isActive.toString() })
+                    });
+                } catch (err) {
+                    console.error("Failed to update engine state", err);
+                }
+            });
+
+            // Sync initial state if available from backend fetch logic (not strictly necessary to fetch again, but sets the UI)
+            engineToggle.dispatchEvent(new Event('change'));
+        }
 
         switchSimMode('Manual');
     }

@@ -3,6 +3,7 @@ import re
 import json
 import whois
 import tldextract
+import difflib
 from datetime import datetime
 from urlextract import URLExtract
 from openai import OpenAI
@@ -83,29 +84,140 @@ def layer2_auth_check(metadata: dict) -> tuple:
 
 def layer3_domain_intel(urls: list) -> tuple:
     score = 0
-    features = {"domain_age_days": -1}
+    features = {
+        "domain_age_days": -1,
+        "typosquatting_target": None,
+        "suspicious_keywords": [],
+        "is_ip_based": False
+    }
+    
     if not urls:
         return 0, features
     
+    # Analyze the primary URL
+    target_url = urls[0]
+    
+    # 1. Keyword Risk Scorer (Max 25%)
+    suspicious_keywords = ['login', 'secure', 'verify', 'update', 'account', 'auth']
+    url_lower = target_url.lower()
+    
+    found_keywords = []
+    kw_score = 0
+    for kw in suspicious_keywords:
+        if kw in url_lower:
+            found_keywords.append(kw)
+            kw_score += 5
+
+    score += min(kw_score, 25)
+
+    if found_keywords:
+        features["suspicious_keywords"] = found_keywords
+    
+    # 2. Extract Domain Details
     try:
-        ext = tldextract.extract(urls[0])
-        domain_to_check = f"{ext.domain}.{ext.suffix}"
+        ext = tldextract.extract(target_url)
+        domain_name = ext.domain.lower()
+        suffix = ext.suffix.lower()
+        subdomain = ext.subdomain.lower()
         
-        w = whois.whois(domain_to_check)
-        creation_date = w.creation_date
-        
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
+        # Check if URL is an IP address
+        if re.match(r'^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$', domain_name):
+            features["is_ip_based"] = True
+            score += 60 # IP-based URLs are highly suspicious for phishing
+            domain_to_check = domain_name
+        else:
+            domain_to_check = f"{domain_name}.{suffix}"
             
-        if creation_date:
-            age_days = (datetime.now() - creation_date).days
-            features["domain_age_days"] = age_days
-            if age_days < 30:
-                score += 30
-    except Exception:
+        features["domain_name"] = domain_to_check
+        
+        # 3. Domain Similarity Detector (Typosquatting) (Max 50%)
+        is_exact_match = False
+        domain_parts = re.split(r'[-]', domain_name)
+        subdomain_parts = re.split(r'[-.]', subdomain)
+        
+        ts_score = 0
+        for brand in MAJOR_BRANDS:
+            if domain_name == brand:
+                is_exact_match = True
+                break
+            
+            # Exact brand match (subdomain trick)
+            if brand in subdomain_parts:
+                 features["typosquatting_target"] = brand
+                 ts_score = max(ts_score, 50)
+                 
+            # Brand inside domain + keyword
+            if brand in domain_name and len(domain_name) > len(brand):
+                 features["typosquatting_target"] = brand
+                 ts_score = max(ts_score, 45)
+                 
+            # Levenshtein and Homoglyphs on each tokenized part of the domain
+            for part in domain_parts:
+                # Homoglyph attack
+                homoglyph_part = part.replace('rn', 'm').replace('1', 'l').replace('0', 'o')
+                if homoglyph_part == brand and part != brand:
+                    features["typosquatting_target"] = brand
+                    ts_score = max(ts_score, 40)
+                    
+                # Calculate Levenshtein-like distance using SequenceMatcher
+                seq = difflib.SequenceMatcher(None, part, brand)
+                matches = sum(triple.size for triple in seq.get_matching_blocks())
+                distance = max(len(part), len(brand)) - matches
+                
+                if distance == 1:
+                    features["typosquatting_target"] = brand
+                    ts_score = max(ts_score, 45)
+                elif distance == 2:
+                    features["typosquatting_target"] = brand
+                    ts_score = max(ts_score, 35)
+            
+        score += min(ts_score, 50)
+                
+        # 4. Basic WHOIS Age Parser & Calibration
+        try:
+            w = whois.whois(domain_to_check)
+            
+            if w.registrar:
+                features["registrar"] = w.registrar if isinstance(w.registrar, str) else str(w.registrar[0])
+                
+            creation_date = w.creation_date
+            if isinstance(creation_date, list):
+                creation_date = creation_date[0]
+                
+            expiration_date = w.expiration_date
+            if isinstance(expiration_date, list):
+                expiration_date = expiration_date[0]
+                
+            if creation_date:
+                features["creation_date"] = creation_date.strftime("%Y-%m-%d")
+                age_days = (datetime.now() - creation_date).days
+                features["domain_age_days"] = age_days
+                
+                # Risk Threshold Calibration based on age
+                if age_days < 3:
+                    score += 70 # extremely new
+                elif age_days < 14:
+                    score += 50 # very new
+                elif age_days < 30:
+                    score += 30 # new
+                elif age_days < 90:
+                    score += 15 # relatively new
+                    
+            if expiration_date:
+                features["expiration_date"] = expiration_date.strftime("%Y-%m-%d")
+
+        except Exception as e:
+            # WHOIS lookup failed, which happens with some exotic TLDs or privacy protections
+            # If the domain is very unusual and WHOIS fails, it's a minor risk factor
+            if suffix in SUSPICIOUS_TLDS:
+                score += 20
+                
+    except Exception as e:
         pass
 
-    return min(score, 100), features
+    # Risk Threshold Calibration: Final Normalization
+    final_score = min(score, 100)
+    return final_score, features
 
 def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_context: dict | None = None) -> dict:
     if metadata is None:
