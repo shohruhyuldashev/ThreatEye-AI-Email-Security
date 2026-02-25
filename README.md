@@ -63,15 +63,3 @@ Build a realistic enterprise-style email security lab environment with AI-driven
 
 ````
 
-Keyin:
-
-```bash
-git add README.md
-git commit -m "Add professional README"
-git push
-````
-
----
-
-
-Shunga qarab keyingi bosqichni quramiz 😈
