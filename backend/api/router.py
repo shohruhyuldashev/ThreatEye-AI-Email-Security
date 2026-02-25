@@ -13,11 +13,20 @@ router = APIRouter()
 
 class URLAnalyzeRequest(BaseModel):
     url: str
+    mode: str = "AI"
 
 class IMAPTestRequest(BaseModel):
     server: str
     user: str
     password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
 
 class SimulationTriggerRequest(BaseModel):
     mode: str = "AI" # 'Manual' or 'AI'
@@ -27,7 +36,7 @@ class SimulationTriggerRequest(BaseModel):
 
 
 @router.get("/stats")
-def get_stats():
+def get_stats(days: int = 7):
     """Returns overall statistics for the dashboard."""
     conn = get_db_connection()
     c = conn.cursor()
@@ -44,24 +53,32 @@ def get_stats():
     c.execute("SELECT COUNT(*) FROM simulations WHERE status = 'Running'")
     active_sims = c.fetchone()[0]
     
-    # Calculate a simplified average risk gauge
-    c.execute("SELECT AVG(risk_score) FROM emails WHERE timestamp >= datetime('now', '-24 hours')")
+    # Calculate a simplified average risk gauge over the selected period
+    c.execute(f"SELECT AVG(risk_score) FROM emails WHERE timestamp >= datetime('now', '-{days} days')")
     avg_risk = c.fetchone()[0] or 0
     
-    # Get 7-day trend
-    c.execute('''
+    # Check for recent critical activity
+    c.execute(f"SELECT COUNT(*) FROM emails WHERE risk_score > 70 AND timestamp >= datetime('now', '-{days} days')")
+    critical_count = c.fetchone()[0] or 0
+    has_critical_activity = critical_count > 0
+    
+    # Get trend based on selected days
+    c.execute(f'''
         SELECT date(timestamp) as day, COUNT(*) as count 
         FROM emails 
-        WHERE risk_score > 50 AND timestamp >= datetime('now', '-7 days')
+        WHERE risk_score > 50 AND timestamp >= datetime('now', '-{days} days')
         GROUP BY date(timestamp)
         ORDER BY date(timestamp)
     ''')
     trend_data = dict(c.fetchall())
     
-    # Prepare last 7 days keys
+    # Prepare last N days keys
     trend_labels = []
     trend_values = []
-    for i in range(6, -1, -1):
+    
+    # If the range is huge (like 365 days), maybe we still just show daily points, 
+    # but for ChartJS daily is fine, it will auto-compress labels
+    for i in range(days - 1, -1, -1):
         d = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
         trend_labels.append(d)
         trend_values.append(trend_data.get(d, 0))
@@ -74,6 +91,7 @@ def get_stats():
         "quarantined_emails": quarantined_emails,
         "active_simulations": active_sims,
         "current_risk_level": int(avg_risk),
+        "has_critical_activity": has_critical_activity,
         "trend_labels": trend_labels,
         "trend_values": trend_values
     }
@@ -143,12 +161,29 @@ def get_quarantined_items():
 
 @router.post("/analyze-url")
 def analyze_url_endpoint(req: URLAnalyzeRequest):
-    """Deep scan a specific URL using the AI engine."""
-    from services.ai_detector import analyze_email_text
-    
-    # We wrap the URL in text to use the existing logic that extracts and evaluates URLs.
-    result = analyze_email_text(f"Check this link: {req.url}")
-    return result
+    """Deep scan a specific URL."""
+    from services.ai_detector import analyze_email_hybrid, layer3_domain_intel
+
+    if req.mode == "OpenSource":
+        # Skip LLM, only run layer 3 domain intel (heuristics)
+        d_score, d_features = layer3_domain_intel([req.url])
+        explanation = "OpenSource Heuristics Check Completed (No AI Model Used)."
+        if d_score > 50:
+             explanation += f" High risk factors found: {d_features}"
+        
+        return {
+            "llm_score": 0,
+            "phishing_score": d_score,
+            "url_threat_score": d_score,
+            "threat_type": "Suspicious Link" if d_score > 50 else "Safe",
+            "explanation": explanation,
+            "features": d_features
+        }
+    else:
+        # Full AI Hybrid pipeline
+        # We wrap the URL in text to use the existing logic that extracts and evaluates URLs.
+        result = analyze_email_hybrid(f"Check this link: {req.url}")
+        return result
 
 @router.get("/notifications")
 def get_notifications():
@@ -168,39 +203,119 @@ def get_notifications():
 @router.get("/analytics")
 def get_analytics():
     """Returns data for the analytics risk charts and tables."""
-    # Mocked data that would theoretically come from complex DB aggregations
+    conn = get_db_connection()
+    c = conn.cursor()
+    
+    # 1. Threat Distribution
+    c.execute("SELECT ai_reason FROM emails WHERE risk_score > 30")
+    reasons = c.fetchall()
+    
+    threat_counts = {
+        "Credential Harvesting": 0,
+        "Malware / Attachment": 0,
+        "Urgency / Spear Phishing": 0,
+        "Spam / Low Risk": 0
+    }
+    
+    for row in reasons:
+        reason = (row[0] or "").lower()
+        if "credential" in reason or "login" in reason or "password" in reason:
+            threat_counts["Credential Harvesting"] += 1
+        elif "malware" in reason or "attachment" in reason or "macro" in reason or "payload" in reason:
+            threat_counts["Malware / Attachment"] += 1
+        elif "urgent" in reason or "immediate" in reason or "overdue" in reason or "wire" in reason:
+            threat_counts["Urgency / Spear Phishing"] += 1
+        else:
+            threat_counts["Spam / Low Risk"] += 1
+            
+    # Default data if DB is completely empty to prevent empty charts
+    if sum(threat_counts.values()) == 0:
+        threat_counts = {"Credential Harvesting": 0, "Malware / Attachment": 0, "Urgency / Spear Phishing": 0, "Spam / Low Risk": 1}
+
+    # 2. Department Vulnerability
+    c.execute('''
+        SELECT recipient, COUNT(*) as incidents, AVG(risk_score) as avg_risk 
+        FROM emails 
+        WHERE risk_score > 30 
+        GROUP BY recipient
+    ''')
+    recipient_stats = c.fetchall()
+    conn.close()
+    
+    departments = {"Sales": {"incidents": 0, "risk_sum": 0}, 
+                   "Finance": {"incidents": 0, "risk_sum": 0}, 
+                   "Engineering": {"incidents": 0, "risk_sum": 0},
+                   "HR": {"incidents": 0, "risk_sum": 0},
+                   "Executive": {"incidents": 0, "risk_sum": 0}}
+                   
+    for row in recipient_stats:
+        rec = (row['recipient'] or "").lower()
+        incidents = row['incidents']
+        # Map recipient to department
+        dept = "Engineering" # Default fallback
+        if "sales" in rec or "marketing" in rec: dept = "Sales"
+        elif "finance" in rec or "invoice" in rec or "billing" in rec: dept = "Finance"
+        elif "hr" in rec or "career" in rec: dept = "HR"
+        elif "ceo" in rec or "admin" in rec or "exec" in rec: dept = "Executive"
+        
+        departments[dept]["incidents"] += incidents
+        departments[dept]["risk_sum"] += incidents * row['avg_risk']
+        
+    dept_list: list[dict[str, str | int | float]] = []
+    for dept_name, stats in departments.items():
+        if stats["incidents"] > 0:
+            avg = float(stats["risk_sum"] / stats["incidents"])
+            risk_level = "High" if avg > 70 else ("Med" if avg > 40 else "Low")
+            dept_list.append({
+                "name": str(dept_name),
+                "incidents": int(stats["incidents"]),
+                "risk_level": str(risk_level),
+                "avg_risk": avg # for sorting
+            })
+            
+    # Sort by risk (High -> Low) then incidents
+    dept_list.sort(key=lambda x: (float(x["avg_risk"]), int(x["incidents"])), reverse=True)
+    
+    # Keep top 4
+    top_depts = dept_list[:4]
+    
+    # Fallback if no data
+    if not top_depts:
+        top_depts = [
+            {"name": "No Data Yet", "incidents": 0, "risk_level": "Low", "avg_risk": 0.0}
+        ]
+
     return {
         "threat_distribution": {
-            "labels": ["Credential Harvesting", "Malware Attachment", "Spear Phishing", "Spam/Low Risk"],
-            "data": [45, 20, 15, 20]
+            "labels": list(threat_counts.keys()),
+            "data": list(threat_counts.values())
         },
-        "departments": [
-            {"name": "Sales", "incidents": 24, "risk_level": "High"},
-            {"name": "Finance", "incidents": 12, "risk_level": "Med"},
-            {"name": "Engineering", "incidents": 2, "risk_level": "Low"}
-        ]
+        "departments": top_depts
     }
 
-@router.post("/quarantine/{quarantine_id}/release")
-def release_quarantine(quarantine_id: int):
+@router.post("/emails/{email_id}/release")
+def release_email(email_id: int):
     """Releases an email from quarantine."""
     conn = get_db_connection()
     c = conn.cursor()
-    # Logically we would move the email back, but here we just delete from quarantine table
-    c.execute('DELETE FROM quarantine WHERE id = ?', (quarantine_id,))
+    # Delete from quarantine
+    c.execute('DELETE FROM quarantine WHERE email_id = ?', (email_id,))
+    # Update email status to 'Allowed' (simulating releasing to inbox)
+    c.execute("UPDATE emails SET status = 'Allowed' WHERE id = ?", (email_id,))
     conn.commit()
     conn.close()
-    return {"status": "success", "message": f"Item {quarantine_id} released"}
+    return {"status": "success", "message": f"Item {email_id} released"}
 
-@router.delete("/quarantine/{quarantine_id}")
-def delete_quarantine(quarantine_id: int):
-    """Permanently deletes a quarantined email."""
+@router.delete("/emails/{email_id}")
+def delete_email(email_id: int):
+    """Permanently deletes an email and its quarantine record."""
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute('DELETE FROM quarantine WHERE id = ?', (quarantine_id,))
+    c.execute('DELETE FROM quarantine WHERE email_id = ?', (email_id,))
+    c.execute('DELETE FROM emails WHERE id = ?', (email_id,))
     conn.commit()
     conn.close()
-    return {"status": "success", "message": f"Item {quarantine_id} deleted"}
+    return {"status": "success", "message": f"Item {email_id} deleted"}
 
 @router.delete("/quarantine/empty/all")
 def empty_quarantine():
@@ -302,6 +417,46 @@ def trigger_simulation(
     except Exception as e:
         logger.error(f"Error triggering simulation: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/auth/login")
+def login(req: LoginRequest):
+    if req.username != "admin":
+        raise HTTPException(status_code=401, detail="Invalid username")
+        
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key='admin_password'")
+    row = c.fetchone()
+    conn.close()
+    
+    saved_password = row['value'] if row and row['value'] else "admin" # Default password
+    
+    if req.password == saved_password:
+        return {"message": "Login successful"}
+    else:
+        raise HTTPException(status_code=401, detail="Invalid password")
+
+@router.post("/auth/change-password")
+def change_password(req: ChangePasswordRequest):
+    conn = get_db_connection()
+    c = conn.cursor()
+    c.execute("SELECT value FROM settings WHERE key='admin_password'")
+    row = c.fetchone()
+    
+    saved_password = row['value'] if row and row['value'] else "admin" # Default password
+    
+    if req.current_password != saved_password:
+        conn.close()
+        raise HTTPException(status_code=401, detail="Incorrect current password")
+        
+    c.execute('''
+        INSERT INTO settings (key, value) 
+        VALUES ('admin_password', ?) 
+        ON CONFLICT(key) DO UPDATE SET value=excluded.value
+    ''', (req.new_password,))
+    conn.commit()
+    conn.close()
+    return {"message": "Password updated successfully"}
 
 @router.get("/settings")
 def get_settings():

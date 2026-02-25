@@ -44,7 +44,36 @@
 <body
     class="bg-cyber-dark text-gray-300 font-sans h-screen flex overflow-hidden selection:bg-cyber-neon selection:text-black">
 
-    <!-- Sidebar Navigation -->
+    <!-- Login Overlay -->
+    <div id="login-overlay" class="fixed inset-0 z-[100] bg-cyber-dark flex items-center justify-center transition-opacity duration-300">
+        <div class="glass-card rounded-xl p-8 max-w-sm w-full mx-4 border border-cyber-border shadow-[0_0_30px_rgba(0,255,157,0.1)]">
+            <div class="text-center mb-8">
+                <i class="fa-solid fa-shield-halved text-cyber-neon text-4xl mb-4 shadow-cyber-neon/50"></i>
+                <h2 class="text-2xl font-bold text-white tracking-wide">Threat<span class="text-cyber-neon">Eye</span></h2>
+                <p class="text-xs text-gray-500 mt-2 uppercase tracking-widest">Secure Access Gateway</p>
+            </div>
+            <form id="login-form" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Username</label>
+                    <input type="text" id="login-username" class="cyber-input w-full rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-cyber-neon" placeholder="admin" required>
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Password</label>
+                    <input type="password" id="login-password" class="cyber-input w-full rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-cyber-neon" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="w-full py-2.5 bg-cyber-neon text-black font-bold rounded-lg hover:bg-[#00cc7a] transition-all shadow-[0_0_15px_rgba(0,255,157,0.3)] mt-2">
+                    Authenticate Process
+                </button>
+            </form>
+            <div id="login-error" class="hidden mt-4 text-center text-xs text-cyber-danger bg-cyber-danger/10 py-2 rounded">
+                Invalid credentials detected.
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Content wrapper -->
+    <div id="main-app-content" class="flex w-full h-full opacity-0 pointer-events-none transition-opacity duration-500">
+        <!-- Sidebar Navigation -->
     <aside class="w-64 bg-cyber-panel border-r border-cyber-border flex flex-col transition-all duration-300">
         <div class="h-16 flex items-center px-6 border-b border-cyber-border">
             <i class="fa-solid fa-shield-halved text-cyber-neon text-2xl mr-3"></i>
@@ -69,7 +98,7 @@
                 class="nav-btn flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors group">
                 <i class="fa-solid fa-box-archive w-6 text-gray-400 group-hover:text-cyber-neon transition-colors"></i>
                 <span class="group-hover:text-white">Quarantine</span>
-                <span class="ml-auto bg-cyber-danger/20 text-cyber-danger py-0.5 px-2 rounded-full text-xs">12</span>
+                <span id="sidebar-quarantine-count" class="ml-auto bg-cyber-danger/20 text-cyber-danger py-0.5 px-2 rounded-full text-xs hidden">0</span>
             </a>
             <a href="#" data-target="simulation"
                 class="nav-btn flex items-center px-4 py-3 text-sm font-medium rounded-lg transition-colors group">
@@ -94,14 +123,18 @@
                 <i class="fa-solid fa-gear w-6 text-gray-400 group-hover:text-cyber-neon transition-colors"></i>
                 <span class="group-hover:text-white">Settings</span>
             </a>
-            <div class="mt-4 flex items-center px-4">
-                <div
-                    class="w-8 h-8 rounded-full bg-cyber-border flex items-center justify-center text-cyber-neon font-bold text-sm">
-                    A</div>
-                <div class="ml-3">
-                    <p class="text-xs text-white font-medium">Admin User</p>
-                    <p class="text-[10px] text-gray-500">Security Team</p>
+            <div class="mt-4 flex flex-col px-4 space-y-3">
+                <div class="flex items-center">
+                    <div class="w-8 h-8 rounded-full bg-cyber-border flex items-center justify-center text-cyber-neon font-bold text-sm">
+                        A</div>
+                    <div class="ml-3">
+                        <p class="text-xs text-white font-medium">Admin User</p>
+                        <p class="text-[10px] text-gray-500">Security Team</p>
+                    </div>
                 </div>
+                <button onclick="logout()" class="w-full py-1.5 text-xs text-gray-400 hover:text-cyber-danger border border-cyber-border hover:border-cyber-danger/50 rounded transition-colors flex items-center justify-center">
+                    <i class="fa-solid fa-arrow-right-from-bracket mr-2"></i> Log Out
+                </button>
             </div>
         </div>
     </aside>
@@ -120,9 +153,9 @@
                     <span class="text-xs font-medium text-cyber-neon">AI Engine: Active</span>
                 </div>
                 <div
-                    class="flex items-center space-x-2 bg-cyber-panel border border-cyber-info/30 px-3 py-1.5 rounded-full">
-                    <div class="w-2 h-2 rounded-full bg-cyber-info animate-pulse delay-75"></div>
-                    <span class="text-xs font-medium text-cyber-info">Simulations: Running</span>
+                    id="top-sim-container" class="flex items-center space-x-2 bg-cyber-panel border border-cyber-info/30 px-3 py-1.5 rounded-full transition-colors">
+                    <div id="top-sim-dot" class="w-2 h-2 rounded-full bg-cyber-info animate-pulse delay-75 transition-colors"></div>
+                    <span id="top-sim-text" class="text-xs font-medium text-cyber-info transition-colors">Simulations: Running</span>
                 </div>
             </div>
 
@@ -176,7 +209,9 @@
     </div>
 
     <!-- Custom Toast -->
-    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-3 pointer-events-none"></div>
+        <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col space-y-3 pointer-events-none"></div>
+
+    </div> <!-- End Main App Content -->
 
     <script src="app.js?v=4"></script>
 </body>
