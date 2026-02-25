@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.db
+
+# Mail runtime data
+mail-data/
+mail-logs/
+mail-state/
+
+# Uploads
+uploads/
+
+# Env
+.env
+
+# Models
+.ollama/
+
+# OS
+.DS_Store
+Thumbs.db

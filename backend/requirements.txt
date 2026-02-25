@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+gophish
+openai
+python-dotenv
+pydantic
+requests
+apscheduler
+imap-tools
+urlextract
+python-whois
+tldextract
+python-multipart
