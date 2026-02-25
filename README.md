@@ -61,5 +61,4 @@ Backend API: [http://localhost:8000](http://localhost:8000)
 
 Build a realistic enterprise-style email security lab environment with AI-driven phishing detection and automated quarantine workflows.
 
-````
 
