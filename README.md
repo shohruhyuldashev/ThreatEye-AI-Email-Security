@@ -38,3 +38,40 @@ Internet → Postfix (SMTP)
 
 ```bash
 docker compose up --build
+````
+
+Frontend: [http://localhost:3000](http://localhost:3000)
+Backend API: [http://localhost:8000](http://localhost:8000)
+
+---
+
+## ⚙ Tech Stack
+
+* FastAPI
+* Docker
+* Dovecot
+* Postfix
+* Ollama (Phi-3)
+* SQLite
+* GoPhish
+
+---
+
+## 📌 Project Goal
+
+Build a realistic enterprise-style email security lab environment with AI-driven phishing detection and automated quarantine workflows.
+
+````
+
+Keyin:
+
+```bash
+git add README.md
+git commit -m "Add professional README"
+git push
+````
+
+---
+
+
+Shunga qarab keyingi bosqichni quramiz 😈
