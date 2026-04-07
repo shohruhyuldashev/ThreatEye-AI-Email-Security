@@ -1,0 +1,108 @@
+/* Custom Styles targeting our advanced Tailwind application */
+
+/* Nav button active states */
+.nav-btn.active {
+    background-color: rgba(31, 31, 46, 0.8);
+    color: white;
+    border-left: 3px solid theme('colors.cyber.neon');
+    border-radius: 0 0.5rem 0.5rem 0;
+}
+
+.nav-btn.active i {
+    color: theme('colors.cyber.neon');
+}
+
+.nav-btn:hover:not(.active) {
+    background-color: rgba(31, 31, 46, 0.4);
+}
+
+/* Glassmorphism Cards */
+.glass-card {
+    background: rgba(19, 19, 26, 0.7);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid theme('colors.cyber.border');
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 0 15px rgba(0, 255, 157, 0.05);
+    border-color: rgba(0, 255, 157, 0.2);
+}
+
+/* Custom subtle scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: theme('colors.cyber.border');
+    border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #33334d;
+}
+
+/* Base View Animation */
+.view-section {
+    display: none;
+    animation: fadeIn 0.3s ease-in-out forwards;
+}
+
+.view-section.active {
+    display: block;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Form inputs & UI elements */
+.cyber-input {
+    background: rgba(10, 10, 15, 0.6);
+    border: 1px solid theme('colors.cyber.border');
+    color: white;
+    transition: all 0.2s ease;
+}
+
+.cyber-input:focus {
+    outline: none;
+    border-color: theme('colors.cyber.neon');
+    box-shadow: 0 0 0 1px rgba(0, 255, 157, 0.2);
+}
+
+/* Table styles */
+.cyber-table-row {
+    border-bottom: 1px solid theme('colors.cyber.border');
+    transition: background-color 0.2s ease;
+}
+
+.cyber-table-row:hover {
+    background-color: rgba(31, 31, 46, 0.5);
+}
+
+/* Toggle Switch animations */
+.toggle-checkbox:checked {
+    right: 0;
+    border-color: theme('colors.cyber.neon');
+}
+
+.toggle-checkbox:checked+.toggle-label {
+    background-color: theme('colors.cyber.neon');
+}

@@ -1,0 +1,95 @@
+services:
+  gophish:
+    image: gophish/gophish:latest
+    container_name: gophish
+    ports:
+      - "3333:3333"
+      - "80:80"
+    restart: unless-stopped
+    volumes:
+      - gophish_data:/opt/gophish
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # Ollama orqa fonda ishlashni boshlaydi va 5 soniyadan so'ng llama3 ni pull qiladi
+    entrypoint: [ "/bin/sh", "-c", "ollama serve & sleep 5 && ollama pull llama3 && wait" ]
+    restart: unless-stopped
+
+  mail_server:
+    image: mailserver/docker-mailserver:latest
+    container_name: mail_server
+    hostname: mail.example.com
+    ports:
+      - "2525:25"
+      - "3143:143"
+    environment:
+      - ENABLE_SPAMASSASSIN=0
+      - ENABLE_CLAMAV=0
+      - ENABLE_FAIL2BAN=0
+      - ENABLE_POSTGREY=0
+      - ENABLE_UPDATE_CHECK=0
+      - ONE_DIR=1
+      - PERMIT_DOCKER=network
+      - POSTMASTER_ADDRESS=postmaster@example.com
+    volumes:
+      - ./mail-data/:/var/mail/
+      - ./mail-state/:/var/mail-state/
+      - ./mail-logs/:/var/log/mail/
+      - ./mail-config/:/tmp/docker-mailserver/
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    container_name: phishing_backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./uploads:/app/uploads
+    environment:
+      - GOPHISH_URL=http://gophish:3333
+      - GOPHISH_API_KEY=${GOPHISH_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-ollama}
+      - OPENAI_API_BASE=http://ollama:11434/v1
+      - AI_MODEL=${AI_MODEL:-llama3}
+    depends_on:
+      - gophish
+      - ollama
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: phishing_frontend
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+
+  webmail:
+    image: roundcube/roundcubemail:latest
+    container_name: webmail
+    environment:
+      - ROUNDCUBEMAIL_DEFAULT_HOST=tls://mail_server
+      - ROUNDCUBEMAIL_DEFAULT_PORT=143
+      - ROUNDCUBEMAIL_SMTP_SERVER=tls://mail_server
+      - ROUNDCUBEMAIL_SMTP_PORT=25
+    ports:
+      - "8080:80"
+    depends_on:
+      - mail_server
+    restart: unless-stopped
+
+volumes:
+  gophish_data:
+  ollama_data:
