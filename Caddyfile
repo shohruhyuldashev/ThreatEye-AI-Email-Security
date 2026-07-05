@@ -1,0 +1,33 @@
+# ThreatEye TLS reverse proxy (enabled via the `production` compose profile).
+# Replace `threateye.localhost` with your real hostname; Caddy will obtain a
+# certificate automatically for a public domain, or use a local CA for *.localhost.
+{
+	# email you@example.com   # uncomment + set for Let's Encrypt on a public domain
+}
+
+threateye.localhost {
+	# API → backend
+	handle /api/* {
+		reverse_proxy backend:8000
+	}
+	handle /health {
+		reverse_proxy backend:8000
+	}
+	handle /ready {
+		reverse_proxy backend:8000
+	}
+	handle /metrics {
+		reverse_proxy backend:8000
+	}
+	# Everything else → static dashboard
+	handle {
+		reverse_proxy frontend:80
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy no-referrer
+	}
+}

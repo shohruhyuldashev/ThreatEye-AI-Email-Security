@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ThreatEye — AI Email Security</title>
+    <!-- Tailwind (CDN) with the shared cyber theme, matching the vanilla app. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              cyber: {
+                dark: "#0a0a0f", panel: "#13131a", border: "#1f1f2e",
+                neon: "#00ff9d", danger: "#ff3366", warning: "#ffb84d", info: "#00ccff",
+              },
+            },
+          },
+        },
+      };
+    </script>
+  </head>
+  <body class="bg-cyber-dark text-gray-300">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+id: prompt_injection_email
+name: Prompt Injection in Email Body
+description: Detects adversarial text attempting to manipulate the AI scanner.
+severity: High
+enabled: true
+attack_technique: T1566
+attack_tactic: Initial Access
+conditions:
+  feature_true: prompt_injection_detected

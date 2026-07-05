@@ -1,0 +1,16 @@
+# Sigma-style detection (subset). ATT&CK technique parsed from `tags:`.
+title: BEC Wire-Transfer Fraud
+id: bec_wire_transfer
+description: High-scoring BEC / payment-fraud email requesting an urgent wire transfer.
+severity: High
+enabled: true
+tags:
+  - attack.t1566
+  - attack.initial_access
+logsource:
+  product: email
+detection:
+  conditions:
+    min_score: 60
+    threat_type_contains: BEC
+condition: conditions

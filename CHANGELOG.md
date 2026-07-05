@@ -1,0 +1,159 @@
+# Changelog
+
+## [1.14.0] - 2026-07-06
+### Changed — UX/UI overhaul of the dashboard views
+- **Settings** rebuilt from a cluttered two-column grid of cards into a clean **sectioned layout** with a left-hand nav (AI Engine · Email · Integrations · Plugins · Security). Only one section shows at a time; the **Save Changes** button is pinned to the top and reachable from every section. All input IDs and handlers are unchanged, so load/save/test/plugin/password logic works as before.
+- **Simulations** — the campaign KPI row (**Emails Sent · Opened · Clicked · Submitted Data**) moved to the **top** of the page and enlarged, so results read at a glance. Launch/roster, department-vulnerability and history panels follow below (nothing hidden behind tabs).
+- **Real-Time Monitor** — fixed a broken layout where the table and detail panel had **no grid wrapper** (`lg:col-span-2` was inert). Table and detail sidebar now sit in a responsive `xl:grid-cols-3` layout; the cramped fixed **600px** scroll box is replaced with a **viewport-adaptive** height (`calc(100vh-15rem)`), a sticky table header, and a **sticky detail sidebar** that stays in view while the list scrolls.
+- **Quarantine** — same treatment: adaptive-height list (no more 600px box), sticky table header, and a **sticky detail panel**.
+
+## [1.13.1] - 2026-07-06
+### Changed — real-time, non-blocking SIEM delivery with retry
+- SIEM alerts are dispatched to a **background worker** (`ThreadPoolExecutor`) the instant an email is quarantined, so a slow or down SIEM never blocks email ingestion (`export_siem_event` now returns in <1 ms). Transient failures are **retried with backoff** (`SIEM_RETRIES`, default 3; 1s→2s→4s), and the final delivery status is recorded in `siem_events`. Verified live: instant dispatch, real-time delivery to a mock SIEM, and 3 logged retries against a dead endpoint without stalling ingestion.
+
+## [1.13.0] - 2026-07-06
+### Added — SIEM alert forwarding configurable from the SOC panel
+- **SIEM destination + auth are now set in the GUI** (Settings → SIEM Alert Forwarding), not just env: webhook/HEC URL, API key/token (masked), auth header + prefix, and event format (raw / ECS / OCSF). Config resolves from settings first, then env (`SIEM_WEBHOOK_URL`, `SIEM_API_KEY`, `SIEM_AUTH_HEADER`, `SIEM_AUTH_PREFIX`, `SIEM_FORMAT`).
+- **Flexible SIEM auth** covers the common backends — Splunk HEC (`Authorization: Splunk <token>`), Elastic (`ApiKey`), Datadog (`DD-API-KEY`), or generic `Bearer` — via the header + prefix fields.
+- **"Send Test Alert" button** (`POST /api/settings/test-siem`, admin) posts a synthetic event and reports the HTTP result, so you can validate connectivity before relying on it.
+- Quarantine alerts auto-forward with the configured auth + format; every attempt's delivery status (sent / failed / skipped, HTTP code, error) is recorded and shown in Framework → SIEM events.
+- Verified live end-to-end against a mock SIEM: GUI config → test alert delivered (HTTP 200) with the `Authorization: Splunk <token>` header in ECS format, a real quarantine forwarded `threateye.email_alert`, and `/api/siem-events` showed `sent`.
+
+## [1.12.0] - 2026-07-05
+### Changed — modern cookie-based JWT sessions (replaces Bearer + localStorage)
+- **Standard JWT (HS256)** access + refresh tokens (PyJWT) with `sub/uid/org/role/type/iat/exp/jti` claims, replacing the custom HMAC token. Short-lived **access** (15 min) + long-lived **refresh** (7 days), both delivered as **httpOnly cookies** — no token in JS/localStorage (XSS-safe). Tunable via `ACCESS_TOKEN_TTL_SECONDS` / `REFRESH_TOKEN_TTL_SECONDS`.
+- **Refresh rotation + reuse detection.** `POST /api/auth/refresh` validates the refresh cookie, one-time-uses its `jti` (tracked in Redis), and issues fresh cookies; a replayed old refresh token is rejected (401). `POST /api/auth/logout` revokes the refresh token and clears cookies. Stateless fallback if Redis is absent.
+- **CSRF protection** (double-submit): a readable `csrf_token` cookie must be echoed in the `X-CSRF-Token` header on mutating requests that authenticate via cookie; `CSRFMiddleware` enforces it. Header/API-key clients are exempt (not CSRF-vulnerable).
+- **`require_auth`** now resolves the session from the `access_token` cookie first, then `Authorization: Bearer` (API/CLI), then `?token=` (SSE). CORS switched to `allow_credentials=true` with explicit origins.
+- **Both frontends migrated to cookies:** the React SPA reads the CSRF cookie (same-origin) and transparently refreshes on 401; the vanilla app keeps the CSRF token from the login/refresh body (cross-origin) — neither stores a token. SSE now authenticates via the cookie (`withCredentials`), dropping the `?token=` query param.
+- Verified live end-to-end: login sets httpOnly cookies (real JWT), CSRF blocks (403) / passes (200), refresh rotates, refresh reuse → 401, logout revokes, Bearer fallback works, and the flow works through the same-origin dashboard proxy. Set `COOKIE_SECURE=true` (and serve over TLS) in production.
+
+## [1.11.1] - 2026-07-05
+### Fixed
+- **Ollama crash-loop.** The compose `ollama` entrypoint pulled `glm-4.5` (not a real model) with `&& wait`, so a failed/slow pull exited the container and it restarted every ~30s — which aborted any manual `ollama pull`. Entrypoint is now resilient (`... || echo …; wait`, serves first, best-effort pull), the default model is a real one (`qwen2.5:3b`), and `mem_limit: 6g` protects the host (no swap).
+- **Detector required outbound internet.** `tldextract`/`urlextract` fetched the public-suffix/TLD list at runtime and crashed analysis in a locked-down container. New `framework/netutil.py` uses the bundled snapshots only (regex fallback for URLs); `ai_detector` and `learning` now use it. Verified: a URL-bearing email is analysed end-to-end with zero egress.
+- **LLM timeout too short for local CPU models.** `LLM_TIMEOUT` default raised 20s → 90s (env-tunable) — a 3B model's first (cold-load) JSON-mode call exceeded 20s and silently fell back to heuristics. Verified end-to-end with **qwen2.5:3b** on Ollama: `test-ai` OK, SOC Copilot answers from tenant data, and the email detector produces a real multi-agent LLM verdict + explanation.
+
+### Notes — running Ollama with no container internet
+If Docker containers can't reach the internet but the host can, pull the model once via a
+host-networked helper into the shared volume, then serve it normally (serving needs no
+internet):
+```
+docker run -d --name ollama_pull --network host -e OLLAMA_HOST=127.0.0.1:11500 \
+  -v <project>_ollama_data:/root/.ollama ollama/ollama
+docker exec -e OLLAMA_HOST=127.0.0.1:11500 ollama_pull ollama pull qwen2.5:3b
+docker rm -f ollama_pull && docker compose up -d ollama
+```
+
+## [1.11.0] - 2026-07-05
+### Added — Production React dashboard + full endpoint audit
+- **React SPA is now a production frontend.** Multi-stage `frontend-react/Dockerfile` (build → nginx) + `nginx.conf` with **SPA fallback** (deep links / refresh work with client-side routing) and a same-origin **`/api` reverse proxy** to the backend (no CORS, SSE-friendly). New compose service **`dashboard`** on port 3001. The app ships as minified, hashed, per-route chunks — no readable monolithic `app.js`.
+- **Modern logical routing** (`frontend-react`): `createBrowserRouter` data router driven by a central route table (`src/routes.tsx`) that is the single source of truth for the router, the role-filtered sidebar, and access rules; one nested layout route (`<Outlet/>`), declarative `RequireAuth`/`RequireRole` guards, lazy per-route code-splitting. Verified with `tsc --noEmit` + `vite build`.
+
+### Fixed
+- **`GET /api/analytics` 500** — queried non-existent `ai_reason`/`recipient` columns on `emails`; now uses `ai_analysis_log`/`threat_type` and joins `quarantine` for recipients, tenant-scoped.
+- **`GET /api/simulations/config` 500** — the literal `%` in `LIKE 'sim_%'` collided with psycopg2 parameter formatting. Fixed globally in the DB shim: no-param queries no longer pass an (empty) params sequence, so literal `%` is left intact.
+- **`POST /api/settings/test-imap`** now accepts an empty body (fields optional) and falls back to saved credentials instead of 422.
+
+### Verified
+- Live end-to-end audit of **all 70 endpoints**: 52 pass, 3 correct error responses from intentionally-absent externals (Ollama/mail/GoPhish), auth (401) and role (403) enforcement confirmed, API-key ingestion + revocation confirmed. 0 unexpected failures.
+
+## [1.10.0] - 2026-07-05
+### Added — Plugin system (.tap), multi-provider AI, notification fix
+- **Detection plugins — the `.tap` format** (`framework/plugins.py`, `plugins` table, `docs/TAP_FORMAT.md`). A `.tap` is a JSON pack of **declarative** detection content (rules + threat-intel + playbooks) with **no executable code** — the key supply-chain safety property. Upload from Settings → Plugins (`POST /api/plugins/upload`, admin); content becomes live immediately (rules join the engine, intel joins the blocklist, playbooks register). Optional HMAC signing (`plugin_signing_key`) marks plugins trusted vs unverified. Endpoints: `GET /api/plugins`, `POST /api/plugins/{id}/toggle`, `DELETE /api/plugins/{id}`. Sample: `plugins/samples/emotet-pack.tap`. 8 new unit tests.
+- **GUI-configurable, multi-provider AI** (`framework/model_provider.py`). The active model is set from Settings → AI Engine (provider, model, API key, base URL) and resolved live per request — no redeploy. Works with any OpenAI-compatible provider: **OpenAI, Anthropic, Groq, Ollama (local), or a custom endpoint**. New **Test AI Connection** button (`POST /api/settings/test-ai`) does a live completion. `ai_api_key` is masked.
+- **IMAP Test Connection fixed.** Blank/masked fields now fall back to the saved credentials (the previous bug sent the masked `********` as the password, so the test always failed), with a short timeout and clearer errors.
+- **Notifications are clickable.** The bell items now navigate to the exact quarantined email (the inline handler referenced a non-global `switchView` and silently threw); `/notifications` now returns the `email_id`.
+- **React SaaS frontend expanded** (`frontend-react/`): typed API client, notification bell, and Dashboard / Monitor / Quarantine / SOC-Copilot / Team / **Plugins** pages with role-gated nav.
+
+## [1.9.0] - 2026-07-05
+### Added — Platform hardening, real mailbox clawback, React frontend scaffold
+- **Test suite + CI.** `backend/tests/` pytest suite (32 tests: auth/RBAC/tokens, SIEM formatters, SLA, ATT&CK, attachment scanner, clustering, roster parsing, reputation, metrics, clawback) and a GitHub Actions workflow (`.github/workflows/ci.yml`) running compile + pytest + compose-config + advisory Semgrep.
+- **Observability.** Dependency-free Prometheus exporter at `/metrics` (request counters + latency histogram via `MetricsMiddleware`), a `/ready` DB-readiness probe, and structured logging (`LOG_LEVEL`).
+- **Redis-backed shared rate-limiting.** The login limiter now uses Redis when `REDIS_URL` is set (correct across replicas) and falls back to the in-process window otherwise. New `redis` service in compose; `framework/cache.py` is offline-safe.
+- **TLS reverse proxy.** Optional Caddy service + `Caddyfile` under the `production` compose profile (`docker compose --profile production up`) terminating HTTPS and proxying dashboard + API.
+- **Real mailbox clawback** (`framework/mail_remediation.py`). The `clawback` response action now performs a real **Microsoft 365 Graph** (app-only) or **Google Workspace** (service-account, domain-wide delegation) soft-delete across configured mailboxes, falling back to the webhook/record path. Provider creds are Settings-configured and masked (`google_sa_json` now treated as sensitive).
+- **React migration scaffold** (`frontend-react/`, Vite + React + TypeScript): typed API client, auth context + protected routing, sidebar layout, and Login/Dashboard/Monitor/SOC-Copilot pages — a maintainable target to port the vanilla `frontend/` into. The existing dashboard is unchanged.
+
+## [1.8.0] - 2026-07-05
+### Added — Adaptive learning (feedback loop)
+- **Verdict-driven reputation** (`framework/learning.py`, `reputation` table). Analyst decisions now change future scoring: **Confirmed Phishing** lowers the sender/URL-domain reputation and auto-blocklists the IOCs; **Marked Safe** raises the sender reputation so the same benign sender stops being re-flagged (fewer repeat false positives). Applied at ingest via `apply_reputation` — a learned-bad sender adds to the risk score (and can force quarantine), a learned-trusted one reduces it, both surfaced in the evidence.
+- **Simulation → behavioural risk.** `POST /api/simulations/sync-behavior` folds GoPhish click/submit outcomes into `user_profiles` (repeat clickers get a higher `behavioral_risk_score` and `failed_simulations_count`), which the detector already factors into scoring for those employees' inbound mail — closing the sim→detection loop.
+- **Learning dashboard.** `GET /api/learning/summary` and `GET /api/learning/reputation` expose false-positive count, confirmed phishing, learned-bad/trusted counts, repeat clickers, and top learned reputation. New "Adaptive Learning" card in the SOC Center with a one-click behaviour sync.
+
+## [1.7.0] - 2026-07-05
+### Added — Attachment malware analysis, reported-phishing intake, campaign clustering, AI copilot
+- **Attachment malware analysis** (`framework/attachment_scanner.py`). Every attachment is now scanned, not just recorded: magic-byte type detection, dangerous/double extensions, extension↔content mismatch (disguised executables), PDF active content (`/JavaScript`, `/OpenAction`, `/Launch`), archive inspection (executables inside / encrypted zips), Office macros via `oletools` (if installed), SHA-256 reputation against the tenant blocklist, and an optional ClamAV `clamd` INSTREAM scan (`CLAMAV_TCP`). A malicious attachment (≥80) forces quarantine; verdict/score/sha256/signals are stored per attachment. The IMAP watcher now passes attachment payloads through the shared ingest pipeline.
+- **User-reported phishing intake.** `POST /api/report-phishing` analyses a forwarded suspicious email, stores it (`source=user_report`), and opens a report; `GET /api/reports` lists them.
+- **Campaign clustering** (`framework/clustering.py`, `GET /api/campaigns/clusters`). Recent inbound threats are grouped into likely campaigns by sender domain + normalised subject, so analysts triage a campaign instead of N near-identical alerts.
+- **AI SOC copilot** (`framework/copilot.py`). `POST /api/copilot` answers natural-language questions grounded in the tenant's own detections (read-only), and `GET /api/emails/{id}/investigate` returns an AI-written investigation narrative (verdict / why / impact / next steps). Both are offline-safe with a deterministic fallback.
+- **Frontend:** SOC Center gains an AI Copilot chat and a Campaign Clusters panel; the email detail gains an "AI Investigate" button. Emails now carry a `source` tag (watcher / api / user_report).
+
+## [1.6.0] - 2026-07-05
+### Added — Full AI-automated phishing simulation (GoPhish)
+- **Employee roster from CSV.** Upload `email, first_name, last_name, department` (headers auto-detected via aliases; a plain email-per-line list also works). Stored per-tenant in `sim_targets`. Endpoints: `POST /api/simulations/targets/upload`, `GET /api/simulations/targets`, `DELETE /api/simulations/targets`.
+- **Real GoPhish campaigns.** `launch_campaign` now provisions the full stack — SMTP sending profile + credential-capture landing page + group + template + campaign — so emails are actually sent and clicks/opens/submissions are tracked. (Previously only a group+template were created and nothing was sent.)
+- **AI-automated mode.** The LLM crafts the lure and targets come from the roster (optionally a department and a random sample); launched via the GoPhish API. `sim_auto_enabled` gates a 24h scheduled automated campaign.
+- **Manual mode.** Upload a CSV (also saved to the roster) or reuse the stored roster/department, then launch.
+- **Per-department / per-employee tracking.** `GET /api/simulations/results` returns per-campaign totals, per-department open/click/submit rates, and the list of employees who clicked or submitted (department carried in the GoPhish `position` field). Launched campaigns are registered in `sim_campaigns`.
+- **Frontend Simulation view rebuilt:** roster import with per-department summary, AI/Manual launch controls (department filter, sample size, lure theme), an automation toggle, result tiles, a department-vulnerability table, a caught-employees list, and campaign history.
+
+### Fixed
+- PDF victim detection used the wrong GoPhish status string (`Clicked` → `Clicked Link`).
+
+## [1.5.0] - 2026-07-05
+### Added — SOC & Blue-Team framework
+- **Threat-intel enrichment.** Per-tenant blocklist/allowlist (`intel_indicators`); extracted IOCs are checked at ingest — a blocklist match forces quarantine and is surfaced in the evidence. Endpoints: `GET/POST /api/intel/indicators`, `DELETE /api/intel/indicators/{id}`. Confirmed-phishing IOCs can be promoted to the blocklist (`block_ioc` action).
+- **SOC metrics & SLA.** Cases now carry `sla_minutes`/`due_at`/`first_response_at`/`resolved_at`; case updates stamp first-response and resolution. `GET /api/soc/metrics` returns open cases, SLA breaches, and **MTTD/MTTR**.
+- **Triage queue.** `GET /api/triage` — a prioritised (P1/P2/P3) analyst worklist of emails needing attention.
+- **Detection-as-Code + ATT&CK coverage.** Rule loader now reads native `.yaml` and **Sigma-style `.yml`** files and tags rules with ATT&CK technique/tactic. `GET /api/attack/coverage` returns a defended-vs-observed coverage matrix by tactic.
+- **Remediation / response.** `POST /api/emails/{id}/remediate` runs `notify` (Slack/Teams), `ticket` (Jira), `clawback`, and `block_ioc` actions — all offline-safe and recorded in `remediation_actions` (`GET /api/remediation`).
+- **SIEM schema normalisation.** SIEM export can emit **ECS** or **OCSF** (Email Activity) in addition to raw, via the `siem_format` setting (or `SIEM_FORMAT`).
+- **Frontend "SOC Center" view:** metric tiles, triage queue with one-click response actions, ATT&CK coverage grid, and threat-intel management.
+
+## [1.4.0] - 2026-07-05
+### Added — SaaS foundation (multi-tenancy, users & RBAC, ingestion API)
+- **Multi-user auth with RBAC.** New `users` table replaces the single hard-coded admin. Four roles: `viewer` < `analyst` < `admin` < `owner`. Login, `/auth/me`, and self-service password change now run against user records. The default `admin` user is seeded (and its password migrated from the legacy `admin_password` setting) so the existing login keeps working.
+- **Role-gated endpoints.** Writes are enforced by role: settings/policies/IMAP-test/user-&-key management require `admin`; SOC actions (release, delete, review, empty-quarantine, case update, trigger simulation) require `analyst`; reads require any authenticated role.
+- **User management API:** `GET/POST /api/users`, `POST /api/users/{id}`, `DELETE /api/users/{id}` (last-owner and self-lockout protections).
+- **Tenant API keys + machine ingestion:** `GET/POST /api/keys`, `DELETE /api/keys/{id}` (key shown once), and `POST /api/v1/emails` authenticated by `X-API-Key`, scoped to the key's tenant, running the full detection pipeline.
+- **Multi-tenancy:** `organization_id` on `emails`/`simulations`; core read paths (stats, emails, quarantine, live SSE stream) and all new writes are tenant-scoped.
+- **Migration runner:** dependency-free ordered SQL migrations in `backend/migrations/` tracked in `schema_migrations` (applied on startup), replacing ad-hoc schema drift.
+- **Shared ingestion pipeline** (`services/ingest.py`): the IMAP watcher and the API ingestion endpoint now share one tenant-aware persist path, so they can't drift.
+- **Frontend "Team & Access" view:** manage users, roles, and API keys; admin-only nav is hidden by role via `/auth/me`.
+
+## [1.3.0] - 2026-07-05
+### Security
+- Added per-IP rate limiting and audit logging (`login_success` / `login_failed`) to the login endpoint to stop brute-force / credential stuffing.
+- Login now returns a single generic error for bad username or password (no user enumeration).
+- Token signing secret is resolved from `THREATEYE_AUTH_SECRET` or auto-generated and persisted, replacing the shipped `change-me-in-production` default.
+- `admin_password` and `auth_secret` are excluded from the settings API.
+- Added `SecurityHeadersMiddleware` (`X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cache-Control`).
+- Tightened CORS: explicit methods/headers, credentials disabled (API is bearer-token based).
+- Compose now binds Postgres and Ollama to `127.0.0.1` only.
+- Added `.env.example`, `.dockerignore`, and `SECURITY.md`.
+
+### Added
+- Real SPF / DKIM / DMARC verdicts and reply-to-mismatch parsing from message headers (replaces the hard-coded `dkim=pass`); DMARC failure now feeds the risk score.
+- `/health` liveness endpoint.
+- Database indexes on the dashboard / monitor / quarantine hot paths.
+
+### Fixed
+- PDF report filename used minutes (`%M`) instead of month (`%m`).
+- Reduced base64-obfuscation heuristic false positives (contiguous-blob match with a higher length floor).
+- Dashboard no longer flashes fabricated placeholder counts before real stats load.
+- Expanded suspicious-TLD and URL-shortener lists.
+
+## [1.1.0] - 2026-02-25
+### Improved
+- Enhanced typosquatting scoring
+- Improved risk keyword calibration
+- Updated classification thresholds
+
+## [1.0.0] - 2026-02-25
+### Added
+- Initial SaaS-ready architecture
+- Async IMAP IDLE monitoring
+- LLM-based phishing detection
+- Automatic quarantine
+- GoPhish integration

@@ -1,0 +1,38 @@
+{
+  "tap_version": "1.0",
+  "plugin": {
+    "id": "emotet-pack",
+    "name": "Emotet Detection Pack",
+    "version": "2024.10",
+    "author": "ThreatEye Community",
+    "description": "Sample plugin: known Emotet infrastructure + a malware-delivery detection rule and response playbook.",
+    "category": "detection"
+  },
+  "detection_rules": [
+    {
+      "rule_id": "emotet_delivery",
+      "name": "Emotet malware delivery",
+      "description": "High-scoring malware/attachment email consistent with Emotet delivery.",
+      "severity": "High",
+      "attack_technique": "T1566.001",
+      "attack_tactic": "Initial Access",
+      "conditions": { "min_score": 60, "threat_type_contains": "Malware" }
+    }
+  ],
+  "intel_indicators": [
+    { "type": "domain", "value": "badmailer.top", "verdict": "block", "confidence": 92, "description": "Emotet sender domain" },
+    { "type": "domain", "value": "invoice-secure.click", "verdict": "block", "confidence": 88, "description": "Emotet lure domain" },
+    { "type": "ip", "value": "185.244.25.171", "verdict": "block", "confidence": 90, "description": "Emotet C2" }
+  ],
+  "playbooks": [
+    {
+      "name": "Emotet response",
+      "trigger_action": "quarantine",
+      "steps": [
+        { "type": "timeline", "message": "Emotet detection pack playbook executed" },
+        { "type": "case_note", "message": "Isolate host, reset credentials, hunt for lateral movement." }
+      ]
+    }
+  ],
+  "signature": null
+}
