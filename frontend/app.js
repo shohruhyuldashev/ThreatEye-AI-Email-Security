@@ -222,10 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    <!-- Data Table -->
-                    <div class="xl:col-span-2 glass-card rounded-xl overflow-hidden border border-cyber-border">
-                        <div class="overflow-x-auto max-h-[calc(100vh-15rem)] custom-scrollbar">
+                <!-- Full-width live table -->
+                <div class="glass-card rounded-xl overflow-hidden border border-cyber-border">
+                    <div class="overflow-x-auto max-h-[calc(100vh-13rem)] custom-scrollbar">
                             <table class="w-full text-left">
                                 <thead class="bg-cyber-dark/50 text-xs text-gray-400 uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
                                     <tr>
@@ -244,26 +243,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             </table>
                         </div>
                     </div>
-
-                    <!-- Detail View (Sidebar) -->
-                    <div class="glass-card rounded-xl border border-cyber-border p-5 flex flex-col max-h-[calc(100vh-15rem)] xl:sticky xl:top-6">
-                        <h3 class="font-medium text-white mb-4 border-b border-cyber-border/50 pb-2 flex justify-between items-center">
-                            <span>Threat Detail</span>
-                            <span class="text-xs font-normal text-gray-500 bg-cyber-dark px-2 py-1 rounded">Select a row</span>
-                        </h3>
-                        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-4" id="monitor-detail-content">
-                            <div class="h-full flex flex-col items-center justify-center text-gray-500 space-y-4">
-                                <i class="fa-solid fa-envelope-open-text text-4xl opacity-50"></i>
-                                <p class="text-sm text-center">Click on any email in the monitoring table to view its full AI analysis and headers.</p>
-                            </div>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-cyber-border space-y-2 hidden" id="monitor-detail-actions">
-                            <button class="w-full py-2 bg-cyber-danger/80 hover:bg-cyber-danger text-white rounded font-medium transition-colors shadow-lg shadow-cyber-danger/20">Delete Permanently</button>
-                            <button class="w-full py-2 bg-transparent border border-cyber-border text-gray-400 hover:text-white hover:border-gray-500 rounded font-medium transition-colors">Release to Inbox (Admin)</button>
-                        </div>
-                    </div>
                 </div>
-            </div>
         `,
         quarantine: `
             <div class="view-section" id="quarantine-view">
@@ -2185,6 +2165,52 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Slide-over detail drawer (appended to <body> so `position:fixed` is not
+    // trapped by the view-section's fadeIn transform).
+    function ensureMonitorDrawer() {
+        if (document.getElementById('monitor-drawer')) return;
+        const el = document.createElement('div');
+        el.id = 'monitor-drawer';
+        el.className = 'fixed inset-0 z-[90] hidden';
+        el.innerHTML = `
+            <div id="monitor-drawer-backdrop" class="absolute inset-0 bg-black/60 backdrop-blur-sm opacity-0 transition-opacity duration-300"></div>
+            <div id="monitor-drawer-panel" class="absolute top-0 right-0 h-full w-full sm:max-w-lg bg-cyber-panel border-l border-cyber-border shadow-2xl flex flex-col translate-x-full transition-transform duration-300 ease-out">
+                <div class="p-5 border-b border-cyber-border flex justify-between items-center shrink-0">
+                    <h3 class="font-semibold text-white flex items-center gap-2"><i class="fa-solid fa-envelope-open-text text-cyber-info"></i> Threat Detail</h3>
+                    <button id="monitor-drawer-close" class="w-8 h-8 rounded-lg text-gray-400 hover:text-white hover:bg-cyber-dark transition-colors flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="flex-1 overflow-y-auto p-5 custom-scrollbar space-y-4" id="monitor-detail-content"></div>
+                <div class="p-5 border-t border-cyber-border space-y-2 hidden shrink-0" id="monitor-detail-actions"></div>
+            </div>`;
+        document.body.appendChild(el);
+        el.querySelector('#monitor-drawer-backdrop').addEventListener('click', () => window.closeMonitorDetail());
+        el.querySelector('#monitor-drawer-close').addEventListener('click', () => window.closeMonitorDetail());
+    }
+    window.openMonitorDetail = function () {
+        ensureMonitorDrawer();
+        const d = document.getElementById('monitor-drawer');
+        d.classList.remove('hidden');
+        requestAnimationFrame(() => {
+            document.getElementById('monitor-drawer-backdrop').classList.remove('opacity-0');
+            document.getElementById('monitor-drawer-panel').classList.remove('translate-x-full');
+        });
+    };
+    window.closeMonitorDetail = function () {
+        const d = document.getElementById('monitor-drawer');
+        if (!d) return;
+        const b = document.getElementById('monitor-drawer-backdrop');
+        const p = document.getElementById('monitor-drawer-panel');
+        if (b) b.classList.add('opacity-0');
+        if (p) p.classList.add('translate-x-full');
+        setTimeout(() => d.classList.add('hidden'), 300);
+    };
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            const d = document.getElementById('monitor-drawer');
+            if (d && !d.classList.contains('hidden')) window.closeMonitorDetail();
+        }
+    });
+
     function bindMonitorRowClicks() {
         document.querySelectorAll('#monitor-table-body .cyber-table-row').forEach(row => {
             // Remove old listener if exists to prevent duplicates (though typically we redraw)
@@ -2197,6 +2223,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const item = emails.find(e => e.id == rowId);
 
                 if (item) {
+                    window.openMonitorDetail();
                     const detailContent = document.getElementById('monitor-detail-content');
                     const detailActions = document.getElementById('monitor-detail-actions');
 

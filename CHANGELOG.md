@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.14.1] - 2026-07-06
+### Changed — Real-Time Monitor rebuilt as full-width table + slide-over drawer
+- The Monitor's data table was cramped into a **2/3-width** column beside a sticky detail sidebar, squeezing its 7 columns horizontally. The table is now **full width** so every column has room, and the per-email **AI analysis opens in a right-hand slide-over drawer** (Datadog/Sentry pattern) with a backdrop, close button and `Esc`-to-close. The drawer is mounted on `<body>` so `position:fixed` isn't trapped by the view's fade-in transform. All detail IDs (`monitor-detail-content`, `monitor-detail-actions`) and their populate/action logic are unchanged.
+- Ships the frontend code for the 1.14.0 UX/UI overhaul (Settings sections, Simulations KPI row on top, Quarantine adaptive-height list) that the previous tag documented.
+
 ## [1.14.0] - 2026-07-06
 ### Changed — UX/UI overhaul of the dashboard views
 - **Settings** rebuilt from a cluttered two-column grid of cards into a clean **sectioned layout** with a left-hand nav (AI Engine · Email · Integrations · Plugins · Security). Only one section shows at a time; the **Save Changes** button is pinned to the top and reachable from every section. All input IDs and handlers are unchanged, so load/save/test/plugin/password logic works as before.
