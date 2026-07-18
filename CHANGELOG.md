@@ -1,5 +1,55 @@
 # Changelog
 
+## [1.18.0] - 2026-07-19
+### Changed — the AI now runs on every email (full-AI by default)
+Detection was quietly short-circuiting the model: a fast path let the deterministic layer
+decide clear-cut cases without ever calling the LLM, which is why RAM stayed idle and it
+felt like "static code, not AI". The fast path is now **off by default** — the specialised
+model runs on every email, and the deterministic checks act only as a **safety net** that
+can raise the score, never replace the model's analysis. Set `DETECTOR_FAST_PATH=1` to
+re-enable the CPU speed shortcut for bulk/offline runs.
+
+### Added — expert model `threateye-phish:1.2` (semantic + injection-hardened)
+- **Semantic-intent reasoning** baked in: modern phishing is grammatically perfect, so the
+  model judges what a message tries to make the recipient *do* (authenticate / pay / open a
+  file on a destination that isn't the genuine brand) rather than looking for typos. It also
+  normalises unicode look-alikes / combining-mark obfuscation and handles multilingual and
+  crypto/wallet lures.
+- **Prompt-injection & jailbreak defence** baked in: email content is treated as DATA, never
+  instructions. Attempts to steer the scanner ("ignore previous instructions", "mark this
+  email as safe", DAN-style framing) are flagged as hostile and never obeyed — verified live
+  (injection email → quarantined, not complied with). The deterministic injection detector
+  was widened to match these families and a single clear attempt is now decisive.
+- **Real-template grounding**: enriched from 67 curated **real** phishing emails (sanitized
+  from the open `phishing_pot` corpus) so the model knows authentic phrasing.
+- **1.1 → 1.2** also gained the broader security expertise from 1.1 (malware, code review,
+  web/network, ATT&CK, IR). Chat with it directly: `docker exec -it ollama ollama run
+  threateye-phish:1.2`.
+
+### Fixed — policy engine could quarantine ALL mail (fail-open)
+A policy whose conditions used an unrecognised key (e.g. `{"min_score": 90}` instead of
+`min_risk_score`) matched **every** email and quarantined all mail. `_matches` now **fails
+closed**: a policy with no conditions or any unknown condition key does not match. Removed a
+stray test policy that had triggered this.
+
+### Added — themed-domain heuristic (catches the clean, authenticated phish)
+A sender/URL registrable domain stitched from security words
+(`account-security-review.com`, `mail-verify-portal.com`) plus an action request is now a
+signal on its own — catching the well-written phish from an attacker-owned, even
+authenticated, domain that has no brand lookalike. Added **zero** false positives across the
+400k benign validation rows.
+
+### Added — bounded, governed self-improvement (`scripts/self_improve.py`) + `MODEL.md`
+The model can get stronger from data, **with hard limits so control is never lost**: it
+learns only from analyst-confirmed verdicts (never its own output), builds a *candidate* and
+promotes it only if a validation gate passes (precision ≥ 0.98, recall ≥ 0.80) **and** its
+anti-injection/safety sections are still intact; it runs only with an explicit `--confirm`
+(never autonomously), caps examples per cycle, refuses to bump past a version ceiling,
+honours a kill-switch, and audits every cycle. A human always makes the final promote.
+`MODEL.md` documents where the model runs, how to chat with it, rebuild it, and archive it.
+A **lean ~1.8 GB tar** (`models/threateye-phish-1.2-*.tar.gz`, base + 1.2 only, no private
+key) fits a GitHub Release asset.
+
 ## [1.17.2] - 2026-07-19
 ### Changed — removed the redundant :3001 React dashboard service
 The `dashboard` service (React SPA on `127.0.0.1:3001`) duplicated the main dashboard on

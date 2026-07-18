@@ -1,0 +1,342 @@
+{
+ "source": "rf-peixoto/phishing_pot (real phishing .eml, sanitized: URLs->{URL}, emails->{EMAIL}, combining marks stripped)",
+ "note": "Authentic phishing subjects/bodies used to teach the model real-world phrasing. Many are grammatically clean — detection must reason on intent, not typos.",
+ "count": 67,
+ "templates": [
+  {
+   "subject": "CLIENTE PRIME - BRADESCO LIVELO: Seu cartao tem 92.990 pontos LIVELO expirando hoje!",
+   "body": "<!DOCTYPE html><html lang=\"en\"><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><body style=\"background-color:rgb(241, 241, 241);\"> <p style=\"text-align:center;\"> <font face=\"Arial\" size=\"2\">Para visualizar as imagens deste email. <a href=\"{URL} aqui</a></font> </p> <meta ht",
+   "from_hint": "BANCO DO BRADESCO LIVELO <{EMAIL}>"
+  },
+  {
+   "subject": "Microsoft account unusual signin activity",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><table dir=\"ltr\" style=\"height: 323px;\"> <tbody> <tr style=\"height: 22px;\"> <td id=\"i1\" style=\"padding: 0px; font-family: 'Segoe UI Semibold', 'Segoe UI Bold', 'Segoe UI', 'Helvetica Neue Medium', Arial, sans-serif; font-size: 17px; ",
+   "from_hint": "\"Microsoft account team\", _ <{EMAIL}>"
+  },
+  {
+   "subject": "🔋 Zonnepanelen voor een goede prijs",
+   "body": "<html xmlns:v=\"urn:schemas-microsoft-com:vml\" style=\"font-family: Arial, Helvetica, sans-serif; -webkit-font-smoothing: antialiased; font-size: 14px; margin: 0px; padding: 0px;\"><!-- HTML HEAD including style definitions --><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"> <",
+   "from_hint": "Zonnepanelen installateur <{EMAIL}>"
+  },
+  {
+   "subject": "Liberacao de IRPF - 6NwlyfzWcsNerv0",
+   "body": "_______________________________________________ Clientephishing@{EMAIL}, Saldo para cr&eacute;ito em conta. Mais informa&ccedil;&otilde;es em anexo. Protocolo: 4793122145117905827 ; 05:59:01 PM _______________________________________________",
+   "from_hint": "\"[BB] - Seu saldo foi liberado - Código: 11084339647130851921\" <{EMAIL}>"
+  },
+  {
+   "subject": "More benefits from Ripple with the Allocation Program",
+   "body": "<html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title>More benefits from Ripple with the Allocation Program</title><link rel=\"important stylesheet\" href=\"chrome://messagebody/skin/messageBody.css\"><body><div class=\"msg46593609094611875\"><u></u><div style=\"background-",
+   "from_hint": "CoinDesk <{EMAIL}>"
+  },
+  {
+   "subject": "86RE: Donation For You",
+   "body": "<html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=windows-1251\"><title></title> </head> <body bgcolor=\"#FFFFFF\" leftmargin=\"5\" topmargin=\"5\" rightmargin=\"5\" bottommargin=\"5\"> <font size=\"2\" color=\"#000000\" face=\"Arial\"> <div> My name is Philip Fredrick; a philanthropist. and f",
+   "from_hint": "Philip Fredrick <{EMAIL}>"
+  },
+  {
+   "subject": "Acao Trabalhista !",
+   "body": "TRIBUNAL REGIONAL DO TRABALHO DA 10a REGIAO - 1o GRAU INTIMACAO ELETRONICA. NOTIFICACAO EXTRAJUDICIAL PEDIDO DE EXPLICACOES. Numero do processo: 003321217-31.2023.7.16.0014 Classe Judicial: ACAO TRABALHISTA - RITO ORDINARIO Orgao: Vara do Trabalho Data de Autuacao: 27/03/2017. Todas as informacoes r",
+   "from_hint": "Intimação eletronica! <{EMAIL}>"
+  },
+  {
+   "subject": "Attention:I am Diplomatic agent Mr.Wood Forest,",
+   "body": "Attention?? I am Diplomatic agent Mr.Wood Forest, I have just arrived here in your country with your consignment box of funds sum of $10.5million USD, I'm here at the airport right now and I need you to reconfirm your home address/current cell phone, so that I can be able to reach you while coming t",
+   "from_hint": "\"Mr.Wood Forest\" <{EMAIL}>"
+  },
+  {
+   "subject": "[Binance] Withdraw Successful - 2023-07-30 51:51:51(UTC)",
+   "body": "<html xmlns=\"{URL} xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\"><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title> </title> <!--[if !mso]><!--> <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"> <!--<![endif]--> <meta nam",
+   "from_hint": "Binance <{EMAIL}>"
+  },
+  {
+   "subject": "Credito IR Liberado - maHSkh0WLRUIpDf6t",
+   "body": "____________________________________ E-mail cliente: phishing@{EMAIL}, Valor disponivel para cr&eacute;ito em conta imediatamente. Informa&ccedil;&otilde;es em anexo. Codigo: 08053035552471856287 ; Emitido as 03:02:16 PM ____________________________________________",
+   "from_hint": "\"[BB] - Comunicado ao cliente - Cod.  37165178664887\" <{EMAIL}>"
+  },
+  {
+   "subject": "Credito IR Liberado - v5V0ZVRe1HjazliqQoYz",
+   "body": "____________________________________ E-mail cliente: phishing@{EMAIL}, Valor disponivel para cr&eacute;ito em conta imediatamente. Informa&ccedil;&otilde;es em anexo. Codigo: 020347259206251 ; Emitido as 06:08:24 PM ____________________________________________",
+   "from_hint": "\"[BB] - Comunicado ao cliente - Cod.  3391350884491727\" <{EMAIL}>"
+  },
+  {
+   "subject": "Microsoft account unusual sign-in activity",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><table dir=\"ltr\" style=\"height: 323px;\"> <tbody> <tr style=\"height: 22px;\"> <td id=\"i1\" style=\"padding: 0px; font-family: 'Segoe UI Semibold', 'Segoe UI Bold', 'Segoe UI', 'Helvetica Neue Medium', Arial, sans-serif; font-size: 17px; ",
+   "from_hint": "Microsoft account team <{EMAIL}>"
+  },
+  {
+   "subject": "Desvende os Segredos do Momentum Trading em Portugues",
+   "body": "<!DOCTYPE html><html xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" lang=\"en\"><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\"><title></title> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"><!--[if mso]><",
+   "from_hint": "Raunaq Sahni <{EMAIL}>"
+  },
+  {
+   "subject": "_Get_Rid_of_Back_Pain_Easily.Try_Therapal!_",
+   "body": "<{URL} <{URL}",
+   "from_hint": "\"Stephanie C. Frisbie\" <{EMAIL}>"
+  },
+  {
+   "subject": "Hi",
+   "body": "Hello Are you looking for a reliable and experienced partner to fulfill your loan requirements? Look no further! Global Merit Expert specializes in all kinds of loans to meet your financial needs.Whether you need a personal loan for unexpected expenses, a mortgage for your dream home, an auto loan f",
+   "from_hint": "{EMAIL}"
+  },
+  {
+   "subject": "[Important] Unauthorized access; Your Amazon account has been locked, Verify your account now. #CASE-ID: 072522.3871922",
+   "body": "⠀",
+   "from_hint": "Aܿmܿaܿzܿon Sܿeܿrܿvicܿe <{EMAIL}>"
+  },
+  {
+   "subject": "Important: You phone number has been changed - Case# 83899065",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional //EN\" \"{URL} xmlns=\"{URL} xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\" style=\"line-height: inherit;\"><head><!--[if gte mso 9]><xml><o:OfficeDocumentSettings><o:AllowPNG/><o:PixelsPerInch>96</o:Pixe",
+   "from_hint": "C o i n b a s e <{EMAIL}>"
+  },
+  {
+   "subject": "[IMPORTANT] Your wallet has been Blocked",
+   "body": "Om du inte kan se HTML-versionen av nyhetsbrevet, klicka pa denna lank: {URL} Avregistrera dig fran detta nyhetsbrev genom att klicka pa denna lank: {URL}",
+   "from_hint": "MetaMask <{EMAIL}>"
+  },
+  {
+   "subject": "Individuelle Prognose fur schnellen Gewichtsverlust ✅🎊",
+   "body": "<!doctype html><html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title>KetoXplode</title> </head> <body centermargin=\"0\" topmargin=\"0\" marginwidth=\"0\" marginheight=\"0\" bgcolor=\"#eeeeee\"> <center> <a href=\"{URL} target=\"_blank\" style=\"color:#202020;text-decoration:none\"",
+   "from_hint": "Magisches Schlankheitssystem🤸‍♀️✅ <{EMAIL}>"
+  },
+  {
+   "subject": "Re: You have won an Ninja Foodi XL Pro Grill & Griddle",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2> Surprise in your inbox (for Ninja Foodi XL Pro Grill &amp; Griddle customers Only) </h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} </center> <style type=\"text/css\">continente f1c4 cce5,",
+   "from_hint": "Ninja Foodi XL Pro Grill & Griddle Unlocked <{EMAIL}>"
+  },
+  {
+   "subject": "3nd attempt: You Are Our July Winner Ultimate Nonstick Cookware",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center><td style=\"padding: 10px 15px; border-left: 1px solid #000000; border-right: 1px solid #000000; border-bottom: 1px solid #000000; border-top: 1px solid #000000;line-height: 1.2\"><span class=\"header\" style=\"display: block; fon",
+   "from_hint": "Costco Customer Support <{EMAIL}>"
+  },
+  {
+   "subject": "Lido Community Rewards",
+   "body": "copy_metmask @media all { /* cyrillic-ext */ @font-face { font-family: 'Fira Sans'; font-style: normal; font-weight: 400; src: local('Fira Sans Regular'), local('FiraSans-Regular'), url({URL} format('woff2'); unicode-range: U+0460-052F, U+1C80-1C88, U+20B4, U+2DE0-2DFF, U+A640-A69F, U+FE2E-FE2F; } /",
+   "from_hint": "Lido DAO <{EMAIL}>"
+  },
+  {
+   "subject": "Lottery Winning payment",
+   "body": "Attention, This is to inform you that a Lottery Winning payment in the amount of US$12,000,000.00 (Twelve million United State Dollars) was legally approved and deposited with this Bank, Royal Bank of Canada (RBC). The lottery won by your e-mail address via online active e-mail address selected from",
+   "from_hint": "Royal Bank Of Canada <{EMAIL}>"
+  },
+  {
+   "subject": "Re: Welcome to our Breville Smart Waffle Pro Rewards Team",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2>Final Notice Coming for a Breville Smart Waffle Pro Reward</h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} <center> <style type=\"text/css\">harmonia samman, font24 transmisi, plein, cc4a, ",
+   "from_hint": "Breville Smart Waffle Pro Department <{EMAIL}>"
+  },
+  {
+   "subject": "Nehmen Sie an unserer Umfrage teil und gewinnen Sie ein Gutschein von Decathlon im Wert von 1.000 Euro.",
+   "body": "<html xmlns=\"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><script ecommerce-type=\"extend-native-history-api\">(()=>{const e=history.pushState,t=history.replaceState,a=history.back,r=history.forward;function n(){window.postMessage({_custom_type_:\"CUSTOM_ON_URL_CHANGED\"})}hi",
+   "from_hint": "Decathlon <{EMAIL}>"
+  },
+  {
+   "subject": "Notice : Your Wallet is currently Suspended!",
+   "body": "Hvis du ikke kan se HTML-versjonen av dette nyhetsbrevet, klikk her {URL} For a melde deg av dette nyhetsbrevet klikk pa denne koblingen {URL}",
+   "from_hint": "MetaMask App <{EMAIL}>"
+  },
+  {
+   "subject": "Notificacao de Credito-HDvRHTDRqwS7abE",
+   "body": "_____________________________________________________________ Prezado Cliente, Voc&ecirc; possui R$4.593,21 pendentes de saque. Siga as instru&ccedil;&otilde;es do arquivo anexo para concluir a libera&ccedil;&atilde;o do saque. Protocolo do E-mail: [971253290362] E-mail do Cliente: phishing@pot ____",
+   "from_hint": "BB - Realize seu Resgate-94322041419 <{EMAIL}>"
+  },
+  {
+   "subject": "OFERTA DE EMPRESTIMO",
+   "body": "Voce precisa de um emprestimo? Concedemos emprestimos a cidadaos de diferentes paises a uma taxa de juros de 3% na faixa de US$ 10.000,00 a US$ 10.000.000,00. Contacte-nos hoje para qualquer tipo de emprestimo que voce precisa atraves de endereco de e-mail: {EMAIL}",
+   "from_hint": "America Loan Company <{EMAIL}>"
+  },
+  {
+   "subject": "52Greetings to You my good friend",
+   "body": "<html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=windows-1251\"><title></title> </head> <body bgcolor=\"#FFFFFF\" leftmargin=\"5\" topmargin=\"5\" rightmargin=\"5\" bottommargin=\"5\"> <font size=\"2\" color=\"#000000\" face=\"Arial\"> <div> Greetings to You my good friend</div> <div> &nbsp;<",
+   "from_hint": "\"Mr.Warren Buffett Billionaire investor\" <{EMAIL}>"
+  },
+  {
+   "subject": "Re: Your chance to receive a FREE Dewalt EXTREME Drill",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2>Surprise in your inbox (for Dewalt EXTREME Drill customers Only)</h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} <center> <style type=\"text/css\">harmonia samman, font24 transmisi, plein, ",
+   "from_hint": "Dewalt EXTREME Drill Rewards <{EMAIL}>"
+  },
+  {
+   "subject": "phishing@pot, Ihr iCloud-Speicher ist voll",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" {URL} xmlns=\"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title>Du hast dein Speicherlimit erreicht</title> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> </head> <body style=\"margin:0",
+   "from_hint": "Dringend 📱❌ <{EMAIL}>"
+  },
+  {
+   "subject": "phishing@pot, Warnung: Der gesamte Speicher ist belegt. Fuhren Sie ein Upgrade durch, um personliche Dateien zu behalten ❌",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" {URL} xmlns=\"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title>Google Storage</title> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> </head> <body style=\"margin:0; padding:0;\"> <a hre",
+   "from_hint": "Google Storage📱🚨 <{EMAIL}>"
+  },
+  {
+   "subject": "Rodrigo temos uma proposta exclusiva esperando voce",
+   "body": "consultas body{margin:0;padding:0;} Rodrigo,&nbsp; Plano ate 40% mais barat o para voce que e MEI ou PJ Reduza o custo do seu plano de saude e melhore a rede de atendimento mantendo carencia do seu plano. Faca sua cotacao e&nbsp;consulte a tabela precos 2023 ATUALIZADA cote agora &nbsp; cancele sua ",
+   "from_hint": "Proposta Planos Amil <{EMAIL}>"
+  },
+  {
+   "subject": "Troque seus pontos por milhas aereas Descontos de ate 35% na fatura do cartao",
+   "body": "<!DOCTYPE html><html lang=\"en\"><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"> <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> <link rel=\"preconnect\" href=\"{URL} <link href=\"{URL} rel=\"stylesheet\"",
+   "from_hint": "Bradesco S/A <{EMAIL}>"
+  },
+  {
+   "subject": "[Wallеt Suspеnded] You May losе all your Assets",
+   "body": "Klikk pa denne linken for a apne HTML-versjonen av nyhetsbrevet pa nettet: {URL} Klikk pa denne linken hvis du ønsker a melde deg av vart nyhetsbrev: {URL}",
+   "from_hint": "МеtaМask <{EMAIL}>"
+  },
+  {
+   "subject": "ACAO TRIBUTARIA DO TRABALHO",
+   "body": "Tribunal de Justica Federal. Numero do Processo: 208521-18.2022.9.13.71855461037510785060 Tipo de Distribuicao: Intimacao Visualize: VER-PROCESSO-184782.pdf {URL} Processo Data de Autuacao Justica do Trabalho 2000021-18.2022.9.13.71855461037510785060 23/06/2023 Justica do Trabalho Atenecaoo: este e-",
+   "from_hint": "Intimação Eletronica <{EMAIL}>"
+  },
+  {
+   "subject": "Re: You have won an Dewalt Power Station",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2> Your chance to receive a FREE Dewalt Power Station</h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} </center> <style type=\"text/css\">b5fb, verhindern, theodore, rabatte, squadron, cilantr",
+   "from_hint": "Dewalt Power Station Unlocked <{EMAIL}>"
+  },
+  {
+   "subject": "Seus pontos Livelo expiram em breve - PROTOCOLO: 628236149.",
+   "body": "<html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title></title> </head> <body> <div class=\"rcmBody\"> <table align=\"center\" bgcolor=\"#ffffff\" cellpadding=\"0\" cellspacing=\"0\" style=\"text-align: center; color: rgb(102, 102, 102); font-family: Arial; margin-top: 10px; ove",
+   "from_hint": "Bradesco <{EMAIL}>"
+  },
+  {
+   "subject": "Action required for validate. Ref-325234325",
+   "body": "",
+   "from_hint": "\"{EMAIL} .com\" <{EMAIL}>"
+  },
+  {
+   "subject": "BLOQUEAMOS UM ACESSO SUSPEITO - PROTOCOLO: 262677886",
+   "body": "<html class=\"stood-recall\"><head class=\"darkness-queen\"> <title class=\"game-exactly\"></title> <meta name=\"keywords\" content=\"pretty, nest, went, sand, actual\"></head> <body class=\"minute-nearest\"> <div class=\"_1Lo7BjmdsKZy3IMMxN7mVu\"> <div class=\"DWrY3hKxZTZNTwt3mx095\"> &nbsp;</div> </div> <div clas",
+   "from_hint": "Mercado Livre <{EMAIL}>"
+  },
+  {
+   "subject": "Impоrtant Infоrmation Frоm AT&T!",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Strict//EN\" \"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> <title>аt&amp;t</title> <style> #logo1 { background-repeat: no-repeat; background-image: url('dat",
+   "from_hint": "Sаmsung Gаlаxy S23 Ultrа <{EMAIL}>"
+  },
+  {
+   "subject": "\\_INFORME-BB_/:Caro Cliente, voce possui (_PONTOS_LIVELO_) vinculados em seu cartao prestes a expirar.* - ID KJW5GWJGNM",
+   "body": "Coloca uma mensagem opcional aqui caso o HTML nao possa ser carregado",
+   "from_hint": "\"\\\\|BANCO*DO*BRASIL|/\" <{EMAIL}>"
+  },
+  {
+   "subject": "INVITE: Tether Gold [Airdrop] #9644818367",
+   "body": "Hi dear, Airdrop Tether Gold. Client ID: 9729726 CLAIM NOW =&gt;",
+   "from_hint": "\"Tether.to\" <{EMAIL}>"
+  },
+  {
+   "subject": "Re: Shipment Pending - Ultimate Nonstick Cookware",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2>CONGRATS! You are the lucky online winner of a brand new Sweepstakes Ultimate Nonstick Cookware entry! </h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} <center> <style type=\"text/css\">har",
+   "from_hint": "Ultimate Nonstick Cookware Shipment <{EMAIL}>"
+  },
+  {
+   "subject": "Verify Your Wallet Now to Ensure Safe and Smooth Access",
+   "body": "---------------------------------------------- ![]({URL} Dear Valued Patron, We extend our heartfelt gratitude for your consistent loyalty and confidence in our offerings. We wish to bring to your attention that the verification process for your wallet is presently awaiting completion. In order to e",
+   "from_hint": "Customer Care 2 <{EMAIL}>"
+  },
+  {
+   "subject": "Mion's live TV appearance threatens his career: explore his story.",
+   "body": "<!DOCTYPE html><html lang=\"en\"><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"></head><body><div style=\" padding: 27px 0; text-align: center; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;background-color: #F9F9F9;\"><div style=\" padding: 25px;background-color",
+   "from_hint": "{EMAIL}"
+  },
+  {
+   "subject": "Multa de Transito",
+   "body": "Prezado(a): phishing@pot Ha um novo documento enviado para voce pela Administradora SISTEMA NACIONAL DE TRANSITO. O Departamento Estadual de Transito ( DETRAN ) no uso de suas Atribuicoes e nos Termos da Lei, Notifica Vossa Senhoria que Consta no Sistema uma Multa de Transito no Valor de 692,08 ( Se",
+   "from_hint": "YCMAS83NHCA <{EMAIL}>"
+  },
+  {
+   "subject": "Nehmen Sie an der kurzen Umfrage fur den Europa-Park teil und erhalten Sie vier kostenlose Eintrittskarten!",
+   "body": "<html xmlns=\"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><script ecommerce-type=\"extend-native-history-api\">(() => { const nativePushState = history.pushState; const nativeReplaceState = history.replaceState; const nativeBack = history.back; const nativeForward = history",
+   "from_hint": "Europa park 😍 <{EMAIL}>"
+  },
+  {
+   "subject": "YOUR $2.500,000.00",
+   "body": "Dear E-mail Owner, My name is Jeff Bezos, an American, investor, and charity donor. I'm the founder, CEO and president of Amazon.com,And Your email address has won you( $2.500,000.00 )Kindly get back to me,so I know your email address is valid.( {EMAIL}) Regards, Mr Jeffrey Preston Bezos",
+   "from_hint": "\"MR. JEFFREY  BEZOS\" <{EMAIL}>"
+  },
+  {
+   "subject": "Notificacao BBInforma - FnEj4oJmgo",
+   "body": "_______________________________________ BB INFORME: SALDO BLOQUEADO PROTOCOLO: 0602380086657866266 phishing@pot veja como liberar sua conta nas instru&ccedil;&otilde;es anexadas. Prazo: 24 horas. _________________________________________________",
+   "from_hint": "\"Informe BB: Conta bloqueada - Cod.9777800143996613966\" <{EMAIL}>"
+  },
+  {
+   "subject": "Ourocard - Ref. Fatura - G3ejrKKzNc30o7qJhZ",
+   "body": "____________________________ OUROCARD - Voce tem pontos acumulados. Codigo &ordm; 9248876554 phishing@pot efetue o resgate imediato, troque por passagens aereas, hoteis e muito mais. Passo a passo no arquivo em anexo. ________________________________________________",
+   "from_hint": "\"[ Ourocard - Voce tem pontos ] Protocolo: 57188720698041\" <{EMAIL}>"
+  },
+  {
+   "subject": "Re: $ 12,000,000.00 USD Payment from Royal Bank of Canada",
+   "body": "Attention, This is to inform you that a Lottery Winning payment in the amount of US$12,000,000.00 (Twelve million United State Dollars) was legally approved and deposited with this Bank, Royal Bank of Canada (RBC). The lottery won by your e-mail address via online active e-mail address selected from",
+   "from_hint": "Royal Bank Of Canada <{EMAIL}>"
+  },
+  {
+   "subject": "Re: Urgent Cooperation with you",
+   "body": "I have a blessed deal in your favor. Thanks for your time. God bless.",
+   "from_hint": "Sergeant I <{EMAIL}>"
+  },
+  {
+   "subject": "INVESTMENT PROPOSAL FROM MR WILLIAMS SANKOH.",
+   "body": "Dear Sir / Madam ; I regret this informal way of contacting you, which I believe would be most effective concerning the information I intend to bring to your notice. Although we have never met before, I have every reason to think that you are a highly respected personality. I sourced your profile fr",
+   "from_hint": "Williams Sankoh <{EMAIL}>"
+  },
+  {
+   "subject": "Todas as passagens aereas com ate 50% de desconto!",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><div class=\"es-wrapper-color\" style=\"background-color: #00ad00;\"> <table class=\"es-wrapper\" style=\"margin: 0pt; padding: 0pt; border-collapse: collapse; width: 100%; height: 100%; background-repeat: repeat; background-position: cente",
+   "from_hint": "123Milhas <{EMAIL}>"
+  },
+  {
+   "subject": "100% kostenlos &amp; ohne Bedingungen✅🎊",
+   "body": "<!DOCTYPE html><html xmlns=\"{URL} xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\"> <head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"></head> <body style=\"word-spacing:normal;\"> <a href=\"{URL} style=\"text-decoration:none;\"><div style=\"",
+   "from_hint": "Amazon ⏳ <{EMAIL}>"
+  },
+  {
+   "subject": "Compliment of the season (Can you handle USD$87M?)",
+   "body": "<html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=windows-1251\"><title></title> </head> <body bgcolor=\"#FFFFFF\" leftmargin=\"5\" topmargin=\"5\" rightmargin=\"5\" bottommargin=\"5\"> <font size=\"2\" color=\"#000000\" face=\"Arial\"> <div> <font size=\"3\">Good day,</font></div> <div> <font s",
+   "from_hint": "\"Mr. Martin Kofi Adu\" <{EMAIL}>"
+  },
+  {
+   "subject": "Corvo",
+   "body": "Corvo, H‌‌el‌‌‌‌l‌o‌ ‌‌‌‌t‌h‌‌i‌‌s‌ ‌i‌s‌ ‌‌L‌‌‌e‌‌o‌n‌ty‌‌‌ne‌ ‌‌‌I‌‌‌‌m‌‌a‌i‌‌ o‌‌‌‌n‌‌‌‌ ‌‌b‌‌‌e‌ha‌l‌f‌‌‌ ‌‌‌o‌‌f ‌‌‌th‌‌‌‌‌e‌ ‌S‌‌t‌u‌‌‌‌d‌‌en‌t‌‌‌-‌‌‌L‌‌o‌‌‌a‌n‌‌ ‌‌‌D‌‌‌e‌b‌‌t‌‌‌‌ De‌‌‌p‌a‌r‌t‌‌m‌‌e‌n‌t‌‌‌‌.‌ W‌‌e ‌‌t‌r‌i‌e‌d‌ ‌‌t‌‌o‌‌‌ ‌c‌‌‌‌o‌nt‌a‌c‌‌‌‌‌t‌ ‌yo‌‌‌u‌ ‌‌‌a‌‌‌t‌ ‌y‌‌‌o‌u‌‌‌r‌‌ ",
+   "from_hint": "Leontyne Imai <{EMAIL}>"
+  },
+  {
+   "subject": "Gluckwunsch! Jetzt Gewinndaten eintragen🎊",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" {URL} xmlns=\"{URL} <head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"></head> <body bgcolor=\"#f2f2f2\"> <!-- GK: container --> <a style=\" text-decoration: none;\" href=\"{URL} <table width=\"100%\" border=\"0\" cellpaddin",
+   "from_hint": "Rossmann🔔✨ <{EMAIL}>"
+  },
+  {
+   "subject": "Individuelle Prognose fur Ihren Muskelaufbau ✅🎊",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" {URL} xmlns=\"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title>Anaboloxan</title> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> </head> <body style=\"margin:0; padding:0; background:#",
+   "from_hint": "Anaboloxan💪🤴⏳ <{EMAIL}>"
+  },
+  {
+   "subject": "Re: Congratulations! Order Verification - AirPods",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2> Final Notice Coming for a AirPods Reward </h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} <center> <style type=\"text/css\">b5fb, verhindern, theodore, rabatte, squadron, cilantro ae9d, sl",
+   "from_hint": "AirPods Unlocked <{EMAIL}>"
+  },
+  {
+   "subject": "update your KYC on your profile",
+   "body": "<html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"></head><body><p> <table class=\"gmail-x_head-wrap\" style=\"FONT-SIZE: 15px; FONT-FAMILY: &quot;Helvetica Neue&quot;, Helvetica, Helvetica, Arial, sans-serif; WIDTH: 600px; WHITE-SPACE: normal; WORD-SPACING: 0px; TEXT-TRANS",
+   "from_hint": "MashreqAlert <{EMAIL}>"
+  },
+  {
+   "subject": "Media Markt Kunden Belohnungsprogramm ✅🎊",
+   "body": "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.0 Transitional//EN\" {URL} xmlns=\"{URL} <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"> <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\"> <meta name=\"format-detection\" content=\"telephone=no\"> <meta name=\"format-detect",
+   "from_hint": "🎊Congrat🎊 <{EMAIL}>"
+  },
+  {
+   "subject": "💕 Bekijk deze mail alleen als je volwassen bent",
+   "body": "<!doctype html><html xmlns=\"{URL} xmlns:v=\"urn:schemas-microsoft-com:vml\" xmlns:o=\"urn:schemas-microsoft-com:office:office\"><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title> </title> <meta http-equiv=\"X-UA-Compatible\" content=\"IE=edge\"> <meta name=\"viewport\" content=\"",
+   "from_hint": "Nerena Groen <{EMAIL}>"
+  },
+  {
+   "subject": "Re:Your Offer is Ready",
+   "body": "<meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><center> <a href=\"{URL} <h2>Notice : Last day to Claim your Exclusive Reward!</h2> <center> <a href=\"{URL} src=\"{URL} <a href=\"{URL} src=\"{URL} </center> <style type=\"text/css\">harmonia samman, font24 transmisi, plein, cc4a, b80c, de",
+   "from_hint": "Thank you <{EMAIL}>"
+  },
+  {
+   "subject": "#rodrigofp: Lido V2 Staking Airdrop",
+   "body": "Hello {name}, , PS: thought you might find this article interesting [link] , Thank you, , [Referrer] said you might be able to answer this question., My role here at Kapost is to see if I can answer any questions for you about Kapost, or clarify anything about our platform after taking a Test Drive.",
+   "from_hint": "\"Airdrop@Lido-fi\" <{EMAIL}>"
+  },
+  {
+   "subject": "Personalisierte Prognose fur schnellen Gewichtsverlust ✅🎊",
+   "body": "<!doctype html><html><head> <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"><title>KetoXplode</title> </head> <body centermargin=\"0\" topmargin=\"0\" marginwidth=\"0\" marginheight=\"0\" bgcolor=\"#eeeeee\"> <center> <a href=\"{URL} target=\"_blank\" style=\"color:#202020;text-decoration:none\"",
+   "from_hint": "\"KetoXplode Gummies Diet V.3⏳\" <{EMAIL}>"
+  }
+ ]
+}

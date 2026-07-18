@@ -105,7 +105,7 @@ services:
       - GOPHISH_API_KEY=${GOPHISH_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-ollama}
       - OPENAI_API_BASE=http://ollama:11434/v1
-      - AI_MODEL=${AI_MODEL:-threateye-phish:1.1}
+      - AI_MODEL=${AI_MODEL:-threateye-phish:1.2}
       - THREATEYE_AUTH_SECRET=${THREATEYE_AUTH_SECRET:-change-me-in-production}
       - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       - GOPHISH_VERIFY_TLS=${GOPHISH_VERIFY_TLS:-false}

@@ -85,7 +85,18 @@ def apply_policies(analysis: dict[str, Any], organization_id: int = 1) -> dict[s
     }
 
 
+SUPPORTED_CONDITIONS = {"min_risk_score", "threat_type_contains", "feature_true", "sender_domain"}
+
+
 def _matches(conditions: dict[str, Any], analysis: dict[str, Any], features: dict[str, Any]) -> bool:
+    # Fail closed. A policy with no conditions, or with any unrecognised condition key,
+    # must NOT match — otherwise a typo like {"min_score": 90} (correct key is
+    # "min_risk_score") is silently ignored and the policy fires on EVERY email,
+    # quarantining all mail. An action-bearing rule you can't fully evaluate is not
+    # allowed to take its action.
+    if not conditions or any(k not in SUPPORTED_CONDITIONS for k in conditions):
+        return False
+
     min_risk = conditions.get("min_risk_score")
     if min_risk is not None and int(analysis.get("final_risk_score", 0)) < int(min_risk):
         return False

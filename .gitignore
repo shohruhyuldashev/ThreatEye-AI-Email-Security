@@ -27,3 +27,7 @@ data/attack.json
 
 # Large labeled dataset (100k, reproducible via scripts/build_dataset.py from open feeds)
 data/phish_dataset.jsonl
+
+# self-improvement runtime state
+data/self_improve_audit.jsonl
+data/SELF_IMPROVE_DISABLED

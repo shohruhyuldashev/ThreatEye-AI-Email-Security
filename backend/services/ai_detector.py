@@ -33,15 +33,25 @@ MAJOR_BRANDS = [
     # Shipping — common pretext for malware lures
     'dhl', 'fedex', 'ups', 'usps',
 ]
+# Attempts to steer the AI scanner that reads this email. These are hostile on sight —
+# legitimate mail never instructs the security tool analysing it.
 PROMPT_INJECTION_PATTERNS = [
-    r'ignore (all )?(previous|prior|above) instructions',
-    r'disregard (all )?(previous|prior|above) instructions',
+    r'ignore (all |any )?(previous|prior|above|the) (instructions|rules|prompts?)',
+    r'disregard (all |any )?(previous|prior|above|the) (instructions|rules|prompts?)',
+    r'forget (all |everything |your )?(previous|prior|above|instructions|rules)',
     r'you are now',
     r'system prompt',
-    r'developer message',
+    r'(developer|system|assistant) (message|instruction)',
     r'return only safe',
-    r'do not classify',
-    r'bypass (the )?(security|filter|scanner)'
+    r'do not (classify|flag|quarantine|block)',
+    r'mark (this|the) (email|message|mail) as (safe|legitimate|benign|trusted|clean)',
+    r'(respond|reply|output|answer) only (with|that)',
+    r'(classify|treat|consider|rate) (this|it) as (safe|legitimate|benign|clean|low[- ]risk)',
+    r'this (email|message) is (safe|legitimate|not (a )?phish)',
+    r'bypass (the )?(security|filter|scanner|check|detection)',
+    r'(new|updated) instructions:',
+    r'\bDAN\b|do anything now|jailbreak',
+    r'override (your |the )?(system|previous|safety)',
 ]
 BEC_KEYWORDS = [
     'wire transfer', 'bank details', 'payment request', 'invoice attached',
@@ -314,7 +324,9 @@ def detect_prompt_injection(text: str) -> tuple[int, dict]:
     for pattern in PROMPT_INJECTION_PATTERNS:
         if re.search(pattern, text_lower):
             matches.append(pattern)
-    score = min(100, len(matches) * 35)
+    # An email that instructs the scanner is hostile on sight — a single clear attempt is
+    # already decisive (75 > the 70 quarantine bar), and stacked attempts saturate.
+    score = min(100, 75 + (len(matches) - 1) * 15) if matches else 0
     return score, {
         "prompt_injection_detected": bool(matches),
         "prompt_injection_patterns": matches[:5]
@@ -404,6 +416,42 @@ def _solicitation(text: str) -> bool:
     return any(term in t for term in SOLICITATION_TERMS)
 
 
+# Words attackers stitch into a domain to look trustworthy. A real company registers
+# its brand ("microsoft.com"), not a description of a security action
+# ("account-security-review.com", "mail-verify-portal.com"). Two or more of these in the
+# registrable label is a strong phishing signal that no brand-lookalike check would catch.
+DOMAIN_THEME_TOKENS = (
+    "secure", "security", "verify", "verification", "account", "login", "signin",
+    "review", "portal", "alert", "support", "update", "confirm", "recovery", "unlock",
+    "auth", "authenticate", "validation", "reset", "access", "service", "notify",
+)
+
+
+def _themed_domain_score(sender: str, urls: list) -> int:
+    """0-100 signal that the sender/URL registrable domain is built from security-theme
+    words rather than a real brand. Two tokens → suspicious, three+ → strong."""
+    best = 0
+    candidates = []
+    if sender and "@" in sender:
+        candidates.append(sender.split("@", 1)[1])
+    for u in (urls or [])[:3]:
+        try:
+            ext = tld_extract(u)
+            candidates.append(f"{ext.domain}.{ext.suffix}" if ext.suffix else ext.domain)
+        except Exception:
+            pass
+    for dom in candidates:
+        label = re.split(r"[.]", dom.lower())[0] if dom else ""
+        # split on non-letters so "account-security-review" and "accountsecurityreview" both count
+        parts = re.split(r"[^a-z]+", label)
+        hits = sum(1 for tok in DOMAIN_THEME_TOKENS if any(tok == p for p in parts) or (len(label) > 12 and tok in label))
+        if hits >= 3:
+            best = max(best, 78)
+        elif hits == 2:
+            best = max(best, 60)
+    return best
+
+
 def _auth_floor(a_score: int, has_url: bool, solicits: bool, suspicious_tld: bool) -> int:
     """
     Authentication is the strongest deterministic anti-spoofing signal, and most real
@@ -461,6 +509,11 @@ def deterministic_score(email_text: str, metadata: dict | None = None) -> dict:
     # Authentication + solicitation floor — the real-world bulk of phishing.
     score = max(score, _auth_floor(a_score, bool(urls), _solicitation(email_text),
                                    bool(h_features.get("suspicious_tld"))))
+    # Security-theme domain (account-security-review.com) + an action request: catches the
+    # clean, well-written, even authenticated phish that has no brand lookalike to flag.
+    themed = _themed_domain_score(metadata.get("sender", ""), urls)
+    if themed >= 78 and _solicitation(email_text):
+        score = max(score, 80)
     score = max(0, min(100, score))
     return {
         "score": score,
@@ -558,13 +611,13 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     }}
     """
     
-    # Fast path: skip the (slow, CPU-bound) LLM call when the cheap deterministic
-    # layers are already decisive. A corpus technique match or an authentication+domain
-    # combination that is unambiguously hostile does not need a second opinion, and a
-    # message with no URLs, passing auth and no heuristic hits is unambiguously benign.
-    # The LLM is reserved for the genuinely ambiguous middle, where it earns its latency.
-    # Tunable / disable-able via env for benchmarking.
-    fast_path = os.getenv("DETECTOR_FAST_PATH", "1") == "1"
+    # Fast path (OFF by default): optionally skip the LLM call when the cheap deterministic
+    # layers are already decisive. This trades the model's judgement for speed, so it is
+    # disabled by default — the specialised LLM should actually run on every email (that is
+    # the point of training it), and the deterministic floors below act only as a SAFETY NET
+    # that can raise the score, never replace the AI's analysis. Set DETECTOR_FAST_PATH=1 to
+    # re-enable the speed shortcut (e.g. for bulk/offline runs on CPU without a GPU).
+    fast_path = os.getenv("DETECTOR_FAST_PATH", "0") == "1"
     deterministic_high = max(corpus_score, d_score, bec_score, injection_score,
                              85 if a_score >= 70 and (d_score >= 50 or h_score >= 40) else 0,
                              85 if corpus_hit.get("high_value") and a_score >= 40 else 0,
@@ -651,6 +704,12 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     # check) is what catches it. Validated against 100k real phishing domains.
     final_score = max(final_score, _auth_floor(
         a_score, bool(urls), _solicitation(email_text), bool(h_features.get("suspicious_tld"))))
+
+    # Security-theme sender/URL domain + an action request: the clean, well-written phish
+    # from an attacker-owned (even authenticated) domain that has no brand lookalike.
+    _themed = _themed_domain_score(metadata.get("sender", ""), urls)
+    if _themed >= 78 and _solicitation(email_text):
+        final_score = max(final_score, 80)
 
     # SPF + DKIM + DMARC all failing (a_score >= 70) means the sender domain is
     # unauthenticated and unaligned — a deterministic spoofing indicator that
