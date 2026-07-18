@@ -113,7 +113,89 @@ def generate_phishing_email(target_name: str, department: str, company: str, con
         result.setdefault("attack_name", technique.get("attack_name", ""))
         result.setdefault("technique_name", technique["name"])
         result.setdefault("technique_severity", technique.get("severity"))
+
+    # Generate the matching credential-capture landing page so the whole campaign —
+    # lure email + fake sign-in page + click/submit tracking — is produced by the AI.
+    result.setdefault("landing_html", generate_landing_page(technique, company))
     return result
+
+
+def generate_landing_page(technique: dict, company: str = "your organization") -> str:
+    """
+    Generate the credential-capture landing page for a simulation.
+
+    This is the page an employee lands on after clicking the lure — a fake sign-in
+    form styled for the impersonated brand. GoPhish records who reaches it (click) and
+    who submits it (data-entry), the Burp-Collaborator-style callback the user asked for:
+    the tracking is native to GoPhish once `capture_credentials` is on, so the page only
+    has to be a believable form. Submitted values are NOT stored as real credentials —
+    this is a training exercise and GoPhish captures the *event*, then redirects.
+
+    Falls back to a solid brand-styled template if the model is unavailable, so a
+    campaign never launches with a broken page.
+    """
+    brand = (technique or {}).get("brand", "")
+    blabel = {
+        "microsoft365": "Microsoft 365", "outlook": "Outlook", "office365": "Office 365",
+        "google": "Google", "okta": "Okta", "paypal": "PayPal", "docusign": "DocuSign",
+        "dropbox": "Dropbox", "adobe": "Adobe",
+    }.get(brand, "Secure Portal")
+
+    prompt = f"""
+    You are building a landing page for an AUTHORIZED phishing-simulation exercise
+    (security-awareness training for consenting employees — not a real attack).
+
+    Produce a single self-contained HTML sign-in page that imitates a generic
+    {blabel} login screen for {company}. Requirements:
+    - One <form method="post"> with an email/username field and a password field, and a
+      sign-in button. GoPhish captures the submission event for training metrics.
+    - After submit, the form must redirect to {{{{.URL}}}} (GoPhish placeholder) — do not
+      submit anywhere else.
+    - Inline CSS only, no external resources, no real logos or trademarked images, no
+      JavaScript that exfiltrates data. Keep it clearly a training artifact.
+    Return ONLY the raw HTML, no markdown fences.
+    """
+    try:
+        client = get_llm_client()
+        resp = client.chat.completions.create(
+            model=get_model_name(),
+            messages=[{"role": "user", "content": prompt}],
+        )
+        html = (resp.choices[0].message.content or "").strip()
+        html = html.replace("```html", "").replace("```", "").strip()
+        # Only trust it if it is a real form that redirects through GoPhish.
+        if "<form" in html.lower() and "password" in html.lower():
+            if "{{.URL}}" not in html:
+                html = html.replace("</form>", '<input type="hidden" name="__redirect" value="{{.URL}}"></form>', 1)
+            return html
+    except Exception as e:
+        print(f"Error generating landing page: {e}")
+    return _fallback_landing_page(blabel, company)
+
+
+def _fallback_landing_page(blabel: str, company: str) -> str:
+    """Brand-styled credential-capture page used when the model is unavailable."""
+    return f"""<!doctype html><html><head><meta charset="utf-8"><title>{blabel} — Sign in</title>
+<style>
+ body{{font-family:'Segoe UI',Arial,sans-serif;background:#f3f3f3;margin:0;display:flex;
+   min-height:100vh;align-items:center;justify-content:center}}
+ .card{{background:#fff;padding:40px 44px;border-radius:6px;box-shadow:0 2px 10px rgba(0,0,0,.12);width:340px}}
+ h1{{font-size:20px;margin:0 0 6px;color:#1b1b1b}} p{{color:#666;font-size:13px;margin:0 0 22px}}
+ label{{display:block;font-size:12px;color:#444;margin:14px 0 4px}}
+ input{{width:100%;padding:10px;border:1px solid #ccc;border-radius:4px;box-sizing:border-box;font-size:14px}}
+ button{{margin-top:22px;width:100%;padding:11px;border:0;border-radius:4px;background:#0067b8;color:#fff;
+   font-size:15px;cursor:pointer}} .n{{font-size:11px;color:#999;margin-top:18px;text-align:center}}
+</style></head><body>
+ <div class="card">
+  <h1>Sign in</h1><p>Use your {company} account to continue.</p>
+  <form method="post" action="">
+   <label>Email or username</label><input name="email" type="text" autocomplete="off" required>
+   <label>Password</label><input name="password" type="password" required>
+   <button type="submit">Sign in</button>
+   <input type="hidden" name="__redirect" value="{{{{.URL}}}}">
+  </form>
+  <div class="n">Security-awareness simulation — {blabel}</div>
+ </div></body></html>"""
 
 
 def _fallback_lure(target_name: str, company: str, department: str, technique: dict) -> dict:

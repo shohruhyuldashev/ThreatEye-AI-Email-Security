@@ -658,14 +658,29 @@ def save_simulation_config(config: dict, _auth: dict = Depends(require_role("adm
 
 @router.get("/simulations/config")
 def get_simulation_config(_auth: dict = Depends(require_auth)):
-    """Retrieves saved simulation settings."""
+    """Retrieves saved simulation settings + whether GoPhish is wired up."""
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT key, value FROM settings WHERE key LIKE 'sim_%'")
+    c.execute("SELECT key, value FROM settings WHERE key LIKE 'sim_%' OR key IN ('gophish_url', 'gophish_key')")
     settings_rows = c.fetchall()
     conn.close()
-    
-    settings_dict = {row['key'].replace('sim_', ''): row['value'] for row in settings_rows}
+
+    settings_dict = {}
+    gophish_url = ""
+    gophish_key = ""
+    for row in settings_rows:
+        k, v = row["key"], row["value"]
+        if k == "gophish_key":
+            gophish_key = v or ""
+        elif k == "gophish_url":
+            gophish_url = v or ""
+        else:
+            settings_dict[k.replace("sim_", "")] = v
+    # Report configured state without leaking the key (env fallback counts too).
+    configured = bool(gophish_key or os.getenv("GOPHISH_API_KEY", ""))
+    settings_dict["gophish_url"] = gophish_url or os.getenv("GOPHISH_URL", "")
+    settings_dict["gophish_configured"] = configured
+    settings_dict["gophish_api_key"] = "********" if configured else ""
     return settings_dict
 
 @router.post("/simulations/targets/upload")

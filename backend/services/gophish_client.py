@@ -8,6 +8,7 @@ return an {"error": ...} dict instead of raising.
 """
 import logging
 import os
+import re
 import random
 from datetime import datetime
 
@@ -42,7 +43,7 @@ _SUBMITTED = {"Submitted Data"}
 def _sim_config() -> dict:
     conn = get_db_connection()
     c = conn.cursor()
-    keys = ("sim_smtp_host", "sim_smtp_from", "sim_phish_url", "sim_landing_html")
+    keys = ("sim_smtp_host", "sim_smtp_from", "sim_phish_url", "sim_landing_html", "sim_redirect_url")
     placeholders = ",".join(["?"] * len(keys))
     c.execute(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", keys)
     s = {row["key"]: row["value"] for row in c.fetchall()}
@@ -52,6 +53,7 @@ def _sim_config() -> dict:
         "smtp_from": s.get("sim_smtp_from") or os.getenv("SIM_SMTP_FROM", "IT Security <it-security@example.com>"),
         "phish_url": s.get("sim_phish_url") or os.getenv("SIM_PHISH_URL", "http://localhost"),
         "landing_html": s.get("sim_landing_html") or DEFAULT_LANDING_HTML,
+        "sim_redirect_url": s.get("sim_redirect_url") or os.getenv("SIM_REDIRECT_URL", ""),
     }
 
 
@@ -83,6 +85,19 @@ def get_api():
         return None
 
 
+def _bare_email(value: str) -> str:
+    """
+    GoPhish's SMTP profile from_address must be a bare email; it rejects the
+    "Display Name <email>" form (that display name belongs on the email template's
+    envelope, not the sending profile). Extract the address if one is wrapped.
+    """
+    m = re.search(r"<([^>]+@[^>]+)>", value or "")
+    if m:
+        return m.group(1).strip()
+    m = re.search(r"[^\s<>]+@[^\s<>]+", value or "")
+    return m.group(0).strip() if m else "it-security@example.com"
+
+
 def ensure_sending_profile(client, cfg: dict):
     """Find or create the reusable SMTP sending profile."""
     for prof in client.smtp.get():
@@ -90,14 +105,14 @@ def ensure_sending_profile(client, cfg: dict):
             return prof
     smtp = SMTP(name=SENDING_PROFILE_NAME)
     smtp.host = cfg["smtp_host"]
-    smtp.from_address = cfg["smtp_from"]
+    smtp.from_address = _bare_email(cfg["smtp_from"])
     smtp.interface_type = "SMTP"
     smtp.ignore_cert_errors = True
     return client.smtp.post(smtp)
 
 
 def ensure_landing_page(client, cfg: dict):
-    """Find or create the credential-capture landing page."""
+    """Find or create the shared fallback credential-capture landing page."""
     for page in client.pages.get():
         if page.name == LANDING_PAGE_NAME:
             return page
@@ -106,6 +121,28 @@ def ensure_landing_page(client, cfg: dict):
         html=cfg["landing_html"],
         capture_credentials=True,
         capture_passwords=True,
+    )
+    return client.pages.post(page)
+
+
+def create_campaign_landing_page(client, name: str, html: str, cfg: dict):
+    """
+    Create a per-campaign landing page from AI-generated HTML.
+
+    `capture_credentials` is what turns the page into the Burp-Collaborator-style
+    callback: GoPhish records the click when the target loads the page and the
+    data-entry event when they submit the form, then redirects them away. We keep a
+    distinct page per campaign so each simulation carries its own brand-matched lure,
+    and so results are never cross-contaminated between campaigns.
+    """
+    page = Page(
+        name=name,
+        html=html or cfg["landing_html"],
+        capture_credentials=True,
+        capture_passwords=True,
+        # Send the user on to the real brand after the exercise so the lure is not a
+        # dead end (configurable; harmless default).
+        redirect_url=cfg.get("sim_redirect_url", ""),
     )
     return client.pages.post(page)
 
@@ -125,7 +162,13 @@ def launch_campaign(targets: list, email_data: dict, campaign_name: str, cfg: di
     suffix = os.urandom(3).hex()
     try:
         smtp = ensure_sending_profile(client, cfg)
-        page = ensure_landing_page(client, cfg)
+        # Prefer the AI-generated brand-matched page for this campaign; fall back to the
+        # shared page only if generation produced nothing.
+        landing_html = email_data.get("landing_html")
+        if landing_html:
+            page = create_campaign_landing_page(client, f"{campaign_name}-page-{suffix}", landing_html, cfg)
+        else:
+            page = ensure_landing_page(client, cfg)
 
         group = Group(name=f"{campaign_name}-grp-{suffix}")
         group.targets = [

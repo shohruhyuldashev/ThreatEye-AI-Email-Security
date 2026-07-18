@@ -24,3 +24,6 @@ Thumbs.db
 # Model archives (multi-GB weight blobs; rebuild with scripts/build_phish_model.py)
 models/*.tar.gz
 data/attack.json
+
+# Large labeled dataset (100k, reproducible via scripts/build_dataset.py from open feeds)
+data/phish_dataset.jsonl

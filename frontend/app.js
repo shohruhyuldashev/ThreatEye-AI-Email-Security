@@ -1072,7 +1072,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /* --- API Fetch Logic & DOM Updates --- */
-    const API_BASE = 'http://localhost:8000/api';
+    // Relative, so the browser calls this same origin and nginx proxies /api to the
+    // backend. This keeps the session on ONE origin, which is what makes the httpOnly
+    // cookies actually stick — a cross-origin http://localhost:8000 base was why every
+    // click asked for a fresh login.
+    const API_BASE = '/api';
 
     const MUTATING_METHODS = ['POST', 'PUT', 'PATCH', 'DELETE'];
 

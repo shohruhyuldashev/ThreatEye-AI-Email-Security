@@ -18,7 +18,7 @@ cd "$(dirname "$0")/.."
 PROJECT="$(basename "$PWD" | tr '[:upper:]' '[:lower:]' | tr -cd 'a-z0-9')"
 VOLUME="${OLLAMA_VOLUME:-$(docker volume ls --format '{{.Name}}' | grep -E 'ollama_data$' | head -1)}"
 OUTDIR="models"
-MODEL="${MODEL_NAME:-threateye-phish:1.0}"
+MODEL="${MODEL_NAME:-threateye-phish:1.1}"
 
 [ -n "$VOLUME" ] || { echo "could not find an ollama_data volume; set OLLAMA_VOLUME"; exit 1; }
 
