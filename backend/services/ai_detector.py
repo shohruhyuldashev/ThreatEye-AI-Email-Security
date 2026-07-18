@@ -18,7 +18,20 @@ SUSPICIOUS_TLDS = [
 ]
 SHORTENERS = ['bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 't.ly']
 URGENCY_KEYWORDS = ['urgent', 'immediately', 'password reset', 'invoice overdue', 'action required', 'account suspended']
-MAJOR_BRANDS = ['microsoft', 'google', 'apple', 'amazon', 'paypal', 'netflix', 'facebook']
+# Brands impersonated in real credential-phishing campaigns. Microsoft 365 /
+# Outlook lures dominate, so the list has to cover the product names an attacker
+# actually registers ("0ffice365-reset.com"), not just the company name.
+MAJOR_BRANDS = [
+    # Microsoft ecosystem — the most impersonated surface in credential phishing
+    'microsoft', 'office365', 'office', 'outlook', 'onedrive', 'sharepoint', 'azure', 'msteams',
+    # Other big identity providers / SaaS
+    'google', 'gmail', 'apple', 'icloud', 'amazon', 'facebook', 'instagram', 'linkedin',
+    'netflix', 'dropbox', 'adobe', 'docusign', 'zoom', 'slack', 'salesforce', 'okta',
+    # Finance / payments
+    'paypal', 'stripe', 'chase', 'wellsfargo', 'citibank', 'hsbc', 'barclays', 'revolut',
+    # Shipping — common pretext for malware lures
+    'dhl', 'fedex', 'ups', 'usps',
+]
 PROMPT_INJECTION_PATTERNS = [
     r'ignore (all )?(previous|prior|above) instructions',
     r'disregard (all )?(previous|prior|above) instructions',
@@ -408,7 +421,14 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     4. SOC Verdict: final analyst-ready conclusion.
 
     Calculate LLM phishing probability (0-100), confidence (0-100), short evidence, and recommended action.
-    
+
+    SCORING SCALE — every "score" field below is an integer from 0 to 100, NOT 0-10:
+      0-20   benign
+      21-50  suspicious
+      51-80  likely phishing
+      81-100 confirmed phishing
+    A verdict you describe as "high risk" must carry a score of at least 75.
+
     Return ONLY JSON:
     {{
       "llm_score": 0,
@@ -447,6 +467,27 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     final_score = max(final_score, d_score if d_score >= 85 else final_score)
     final_score = max(final_score, bec_score if bec_score >= 70 else final_score)
     final_score = max(final_score, injection_score if injection_score >= 70 else final_score)
+
+    # --- Decisive-signal floors -------------------------------------------------
+    # The weighted average above is designed to blend weak signals, but it also
+    # dilutes strong ones: an email the analyst model rates 82/100 with every
+    # authentication check failing still averaged out to ~30 and got delivered.
+    # These floors make a signal that is on its own conclusive stay conclusive.
+
+    # A confident model verdict is not something to average away.
+    if llm_score >= 70 and confidence_score >= 60:
+        final_score = max(final_score, llm_score)
+
+    # SPF + DKIM + DMARC all failing (a_score >= 70) means the sender domain is
+    # unauthenticated and unaligned — a deterministic spoofing indicator that
+    # holds even when the LLM is slow, wrong, or unavailable. On its own it is
+    # "review"; combined with a lookalike domain or heuristic hits it is a spoof.
+    if a_score >= 70:
+        final_score = max(final_score, 60)
+        if d_score >= 50 or h_score >= 40:
+            final_score = max(final_score, 85)
+
+    final_score = min(final_score, 100)
 
     if threat_type == "Unknown":
         if injection_score >= 35:

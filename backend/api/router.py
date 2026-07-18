@@ -1296,6 +1296,12 @@ def list_siem_events(limit: int = Query(100, ge=1, le=500), _auth: dict = Depend
     conn.close()
     return rows
 
+@router.post("/siem-events/replay")
+def replay_siem_events(limit: int = Query(50, ge=1, le=500), _auth: dict = Depends(require_role("admin"))):
+    """Re-dispatch alerts that ultimately failed to reach the SIEM."""
+    from framework.siem import replay_failed
+    return replay_failed(limit)
+
 @router.get("/playbooks")
 def list_playbooks(_auth: dict = Depends(require_auth)):
     conn = get_db_connection()

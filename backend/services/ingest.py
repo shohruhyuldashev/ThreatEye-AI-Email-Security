@@ -19,7 +19,7 @@ from framework.mitre import map_mitre
 from framework.playbooks import execute_playbooks
 from framework.policy_engine import apply_policies
 from framework.rules import evaluate_detection_rules
-from framework.siem import export_siem_event
+from framework.siem import export_siem_event, siem_min_score
 from framework.soc_metrics import sla_for
 from framework.threat_intel import enrich
 from framework.attachment_scanner import scan_attachment
@@ -202,7 +202,19 @@ def persist_detection(
     )
 
     case_id = None
-    siem_payload = None
+    siem_payload = {
+        "email_id": email_id,
+        "organization_id": organization_id,
+        "sender": sender,
+        "subject": subject,
+        "recipient": recipient,
+        "risk_score": phishing_score,
+        "threat_type": threat_type,
+        "policy": policy_result,
+        "mitre": mitre,
+        "iocs": iocs,
+        "rule_matches": rule_matches,
+    }
     if is_threat:
         cursor.execute(
             "INSERT INTO quarantine (email_id, recipient, ai_reason) VALUES (?, ?, ?)",
@@ -231,21 +243,13 @@ def persist_detection(
                 (email_id, f"Case #{case_id} created"),
             )
         audit_log("email_quarantined", source, "email", email_id, ai_reason)
-        siem_payload = {
-            "email_id": email_id,
-            "organization_id": organization_id,
-            "sender": sender,
-            "subject": subject,
-            "recipient": recipient,
-            "risk_score": phishing_score,
-            "threat_type": threat_type,
-            "policy": policy_result,
-            "mitre": mitre,
-            "iocs": iocs,
-            "rule_matches": rule_matches,
-        }
         export_siem_event("threateye.email_alert", siem_payload)
         execute_playbooks(policy_result["policy_action"], email_id, case_id, siem_payload, cursor)
+    elif phishing_score >= siem_min_score():
+        # Delivered, but scored high enough that the SOC should still see it.
+        # Without this, everything under the quarantine bar is invisible in the
+        # SIEM — which is precisely the band worth threat-hunting over.
+        export_siem_event("threateye.email_suspicious", siem_payload)
 
     return {
         "email_id": email_id,
