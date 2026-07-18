@@ -1,5 +1,60 @@
 # Changelog
 
+## [1.16.0] - 2026-07-18
+### Added — MITRE-anchored phishing knowledge base + specialised model
+- **1,210-technique phishing corpus** (`data/phishing_corpus.json`, built by
+  `scripts/build_phishing_corpus.py`). Anchored on the real MITRE ATT&CK Enterprise
+  phishing tree — the official STIX bundle from github.com/mitre/cti, 47 techniques
+  (T1566/T1598/T1534/T1204/T1621/T1585/T1586/T1608 …) — then expanded across the axes
+  that vary in real campaigns and that a mail product can observe: 40 pretext families ×
+  41 impersonated brands × 20 evasion techniques × target role. Pairings are constrained
+  to what occurs in the wild (a customs-fee lure pairs with DHL, not Okta).
+- **Corpus wired into detection** (`framework/phish_corpus.py`). A pretext + impersonated
+  brand + observed evasion is a named, pre-rated technique, scored **deterministically** —
+  it holds when the LLM is slow, wrong or offline — and the top matches are injected into
+  the analyst prompt as grounding. BEC pretexts (bank-change, wire, payroll, gift-card,
+  OTP) match on the pretext alone, since a clean message *is* the attack there.
+- **Specialised model `threateye-phish:1.0`** (`scripts/build_phish_model.py`): a derived
+  Ollama model pinning qwen2.5:3b with an expert system prompt distilled from the corpus,
+  classifier-tuned decoding (temperature 0.1, num_ctx 4096, num_predict 512) and worked
+  examples that lock the JSON schema, the 0-100 scale, and the false-positive boundary.
+  It is prompt/parameter specialisation over a retrieved technique library, not GPU
+  fine-tuning — reproducible in seconds, inspectable, and CPU-friendly.
+- **Model archiving** (`scripts/model-archive.sh export|import|list`): the trained model
+  survives `docker compose down -v` / a host rebuild / a move to an offline machine. It
+  archives the `ollama_data` **volume** (the weights live there, not in the image),
+  excluding Ollama's private key. Produces `models/threateye-phish-1.0-<date>.tar.gz`
+  (~2.7 GB, git-ignored).
+
+### Added — detection fast path (major latency fix)
+CPU inference of a 3B model runs ~45-60s per email. Now the cheap deterministic layers
+run first and the **LLM is skipped when they are already decisive**: a corpus match or an
+authentication+domain combination that is unambiguously hostile, or an authenticated
+sender with no URLs and no signals that is unambiguously benign. Measured: clearly
+malicious mail **0.07-1.0s** (was ~60s), clearly benign internal mail **0.1s**; only the
+genuinely ambiguous middle (a URL that isn't a known-bad pattern) pays the model cost.
+Toggle with `DETECTOR_FAST_PATH=0`.
+
+### Added — corpus-driven simulations
+Phishing simulations now draw their lure from the same corpus, so a campaign exercises a
+named ATT&CK technique and is **role-aware** (Finance draws payment-fraud pretexts, IT
+draws VPN/helpdesk). Each campaign carries its `attack_id`. New `GET /corpus/stats` and
+`GET /corpus/techniques`; the Simulations header shows the loaded technique count.
+
+### Fixed — session expired after 15 minutes, sending users back to login (critical)
+Clicking Simulations/Quarantine (or any view) after ~15 minutes bounced the user to the
+login screen. Two causes: the readable `csrf_token` cookie was issued with the **access**
+token's 15-minute lifetime while the refresh token lives 7 days, so once it expired the
+refresh call itself could not pass CSRF and every session died at 15 minutes; and the
+vanilla frontend only kept the CSRF token in a JS variable that a page reload wiped. Fixed
+by issuing the CSRF cookie with the refresh lifetime and reading it back from the cookie
+on every mutating request. Verified: after the access token expires, refresh succeeds and
+navigation continues without a re-login.
+
+### Changed
+- Backend image now includes `pytest`; `data/` is mounted read-only into the backend for
+  the corpus. Default model is `threateye-phish:1.0`. Suite: **40/40**.
+
 ## [1.15.0] - 2026-07-18
 ### Fixed — detection was letting obvious phishing through (critical)
 A live end-to-end test caught a credential-phishing email — Office 365 lookalike

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from db import get_db_connection
 from framework.model_provider import get_llm_client, get_model_name
 from framework.netutil import tld_extract, find_urls
+from framework.phish_corpus import match_email as corpus_match, prompt_context as corpus_prompt
 
 load_dotenv()
 
@@ -375,6 +376,23 @@ def _llm_soc_analysis(prompt: str) -> dict:
         print(f"LLM Error: {e}")
         return {}
 
+def _corpus_threat_label(match: dict) -> str:
+    """Human label for a corpus technique, used when the model under-labels a hit."""
+    lure = match.get("lure", "")
+    if lure in ("vendor_bank_change", "wire_transfer", "payroll_change", "gift_card", "banking_otp"):
+        return "BEC / Payment Fraud"
+    if lure in ("password_expiry", "mfa_reenrollment", "mfa_fatigue", "security_alert"):
+        return "Credential Phishing"
+    if match.get("delivery") == "attachment":
+        return "Malicious Attachment"
+    return "Phishing"
+
+
+def safe_text_for_corpus(email_text) -> str:
+    """Corpus matching is keyword-based, so it only ever sees lowercased text."""
+    return str(email_text or "").lower()
+
+
 def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_context: dict | None = None) -> dict:
     if metadata is None:
         metadata = {}
@@ -389,12 +407,22 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     injection_score, injection_features = detect_prompt_injection(email_text)
     bec_score, bec_features = detect_bec_signals(email_text, metadata)
     
+    # Corpus match: a named, pre-rated technique from the MITRE-anchored library.
+    # Deterministic, so it holds when the LLM is slow, wrong or unavailable.
+    corpus_hit = corpus_match(
+        safe_text_for_corpus(email_text), metadata.get("sender", ""),
+        urls, {**h_features, **d_features, **a_features}, metadata.get("attachments"),
+    )
+    corpus_score = corpus_hit.get("score", 0)
+
     features = {
         **h_features,
         **a_features,
         **d_features,
         **injection_features,
         **bec_features,
+        "corpus_technique": (corpus_hit["matches"][0]["id"] if corpus_hit.get("matches") else None),
+        "corpus_score": corpus_score,
         "user_behavioral_risk": user_context.get("behavioral_risk_score", 0),
         "failed_simulations_count": user_context.get("failed_simulations_count", 0)
     }
@@ -410,6 +438,8 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     
     Based on the technical features below:
     {json.dumps(features, indent=2)}
+
+    {corpus_prompt(corpus_hit)}
     
     Email Text Snippet:
     {safe_text[:500]}
@@ -446,7 +476,48 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     }}
     """
     
-    llm_result = _llm_soc_analysis(prompt)
+    # Fast path: skip the (slow, CPU-bound) LLM call when the cheap deterministic
+    # layers are already decisive. A corpus technique match or an authentication+domain
+    # combination that is unambiguously hostile does not need a second opinion, and a
+    # message with no URLs, passing auth and no heuristic hits is unambiguously benign.
+    # The LLM is reserved for the genuinely ambiguous middle, where it earns its latency.
+    # Tunable / disable-able via env for benchmarking.
+    fast_path = os.getenv("DETECTOR_FAST_PATH", "1") == "1"
+    deterministic_high = max(corpus_score, d_score, bec_score, injection_score,
+                             85 if a_score >= 70 and (d_score >= 50 or h_score >= 40) else 0,
+                             85 if corpus_hit.get("high_value") and a_score >= 40 else 0)
+    # Benign fast path: fully-authenticated sender, no URLs, no domain or corpus
+    # signal, and only low-grade heuristic/BEC/injection noise (a single stray keyword
+    # like "numbers" scores a harmless ~14 and must not force a 50s model call).
+    conclusive_benign = (
+        not corpus_hit.get("matches") and not corpus_hit.get("high_value")
+        and a_score == 0 and d_score == 0
+        and h_score <= 15 and bec_score < 30 and injection_score < 30
+    )
+
+    if fast_path and deterministic_high >= 85:
+        llm_result = {
+            "llm_score": deterministic_high,
+            "confidence_score": 90,
+            "explanation": "Decisive on deterministic signals (technique match / authentication + domain); analyst model skipped for speed.",
+            "threat_type": "Unknown",  # relabelled below from the corpus/auth signals
+            "recommended_action": "",
+            "agent_verdicts": _fallback_agents(h_score, a_score, d_score, deterministic_high, bec_score, injection_score),
+            "evidence": [],
+        }
+    elif fast_path and conclusive_benign:
+        llm_result = {
+            "llm_score": h_score,
+            "confidence_score": 80,
+            "explanation": "Authenticated sender, no suspicious URLs or heuristics; analyst model skipped for speed.",
+            "threat_type": "Safe",
+            "recommended_action": "Deliver.",
+            "agent_verdicts": _fallback_agents(h_score, a_score, d_score, h_score, bec_score, injection_score),
+            "evidence": [],
+        }
+    else:
+        llm_result = _llm_soc_analysis(prompt)
+
     llm_score = _safe_int(llm_result.get("llm_score"), 0)
     confidence_score = _safe_int(llm_result.get("confidence_score"), 65 if llm_result else 40)
     explanation = llm_result.get("explanation", "Heuristic analysis completed; LLM analysis unavailable.")
@@ -478,6 +549,17 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     if llm_score >= 70 and confidence_score >= 60:
         final_score = max(final_score, llm_score)
 
+    # A corpus match names the exact technique and carries a pre-rated severity, so
+    # it floors the score on its own — this path needs no model at all.
+    if corpus_score >= 70:
+        final_score = max(final_score, corpus_score)
+
+    # Payment-instruction fraud (BEC) carries no lookalike domain or payload to catch,
+    # so it is only ever "a request". Combined with a sender that fails authentication
+    # it is the classic vendor-impersonation invoice fraud and must not be delivered.
+    if corpus_hit.get("high_value") and a_score >= 40:
+        final_score = max(final_score, 85)
+
     # SPF + DKIM + DMARC all failing (a_score >= 70) means the sender domain is
     # unauthenticated and unaligned — a deterministic spoofing indicator that
     # holds even when the LLM is slow, wrong, or unavailable. On its own it is
@@ -498,6 +580,22 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
             threat_type = "Suspicious Link"
         elif final_score < 30:
             threat_type = "Safe"
+
+    # When a deterministic floor (corpus technique, authentication failure) overrides a
+    # benign model verdict, the label has to move with the score. "Quarantined / Benign"
+    # is not something an analyst should ever have to reconcile.
+    # Vague labels ("Suspicious") are no more useful on a quarantined message than
+    # wrong ones — name the technique the corpus actually matched.
+    VAGUE_LABELS = ("Safe", "Benign", "Unknown", "", "Suspicious", "Suspicious Link",
+                    "Unlikely", "Low Risk", "None")
+    if final_score >= 70 and str(threat_type).strip() in VAGUE_LABELS:
+        if corpus_hit.get("matches"):
+            best = corpus_hit["matches"][0]
+            threat_type = "BEC / Payment Fraud" if corpus_hit.get("high_value") else _corpus_threat_label(best)
+        elif a_score >= 70:
+            threat_type = "Spoofed Sender"
+        else:
+            threat_type = "Likely Phishing"
 
     recommended_action = llm_result.get("recommended_action") or _build_recommended_action(final_score, threat_type, features)
     evidence_items = llm_result.get("evidence") or []

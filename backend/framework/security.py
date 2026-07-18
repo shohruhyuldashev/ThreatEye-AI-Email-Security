@@ -218,7 +218,12 @@ def set_auth_cookies(response, identity: dict) -> str:
     # Refresh token: httpOnly and scoped to /api/auth so it's only sent to refresh/logout.
     response.set_cookie(REFRESH_COOKIE, refresh, httponly=True, max_age=REFRESH_TTL, path=REFRESH_PATH, **common)
     # CSRF token: readable by JS so the SPA can echo it in the X-CSRF-Token header.
-    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, max_age=ACCESS_TTL, path="/", **common)
+    # It must outlive the *access* token and track the *refresh* token instead: the
+    # refresh call is itself a mutating request, so if this cookie expired with the
+    # access token there would be no way to CSRF-validate a refresh and every
+    # session would die after ACCESS_TTL — sending the user back to the login screen
+    # 15 minutes in, despite a 7-day refresh token.
+    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, max_age=REFRESH_TTL, path="/", **common)
     return csrf
 
 
