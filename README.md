@@ -1,248 +1,271 @@
-# ThreatEye – AI Powered Email Security Platform
+# ThreatEye — AI-Powered Email Security Platform
 
-ThreatEye is a real-time phishing detection platform that combines:
+ThreatEye is a real-time phishing-detection lab where **the AI defends against AI-crafted
+attacks**. It intercepts incoming mail, scores every message with a specialised local LLM
+plus a deterministic detection stack, quarantines threats, and runs full-blown phishing
+simulations against your own staff — all self-hosted, offline-capable, and SOC-ready.
 
-- Docker Mailserver (Postfix + Dovecot)
-- Async IMAP IDLE Monitoring
-- LLM-based Analysis (Ollama / Phi-3)
-- Rule-based + Hybrid Threat Detection
-- Automatic IMAP Quarantine
-- GoPhish Simulation Integration
-- PostgreSQL-backed SOC evidence, feedback, timeline, and domain-intel cache
-- Plugin-style detection engine framework
-- Policy engine, audit log, and case management foundation
-- Attachment metadata scanning layer
-- Model provider abstraction for Ollama/OpenAI-compatible APIs
-- IOC extraction for URLs, domains, IPs, emails, hashes, and filenames
-- MITRE ATT&CK mapping for SOC-ready context
-- SIEM webhook export (`SIEM_WEBHOOK_URL`)
-- SOAR-style playbook execution
-- Detection-as-Code YAML rules in `backend/rules/`
+Core pieces:
+
+- **Specialised detection model** (`threateye-phish:1.1`) — a local Ollama model derived
+  from qwen2.5:3b, its expertise baked into the model (phishing, malware, code review,
+  ATT&CK, IR). Any OpenAI-compatible provider also works.
+- **MITRE-anchored phishing corpus** (1,210 techniques) + a **1,000,000-row labeled
+  dataset** built from real open feeds, used to validate the detector at scale.
+- **Deterministic detection stack** — heuristics, SPF/DKIM/DMARC authentication, domain
+  intel/typosquat, BEC signals, prompt-injection guard, and a corpus matcher — so
+  detection holds when the LLM is slow or offline.
+- **Real-time analysis** on two entry points: async IMAP monitoring and a machine
+  ingestion API, streamed to the dashboard over SSE.
+- **AI-driven GoPhish simulations** — the model writes the lure *and* the credential-capture
+  landing page; GoPhish tracks who clicks and who submits (Collaborator-style).
+- **Real SIEM integration** — Elasticsearch + Kibana, ECS/OCSF export, configured from the
+  admin panel.
+- Multi-tenant RBAC, JWT-cookie sessions, `.tap` detection plugins, adaptive learning,
+  attachment malware analysis, SOC copilot, PostgreSQL evidence store.
 
 ---
 
 ## 🏗 Architecture
 
-Internet → Postfix (SMTP)
-→ Dovecot (IMAP)
-→ Async Email Watcher (IDLE)
-→ AI Detection Engine
-→ Auto Quarantine (IMAP Folder Move)
-→ PostgreSQL Evidence Store
-→ Dashboard (Frontend + API)
-
----
-
-## 🔥 Features
-
-- Real-time email interception
-- Async IMAP IDLE monitoring
-- Typosquatting detection
-- URL threat scoring
-- LLM reasoning engine
-- AI Mode 2.0 multi-agent SOC verdicts
-- Prompt-injection guard for adversarial email content
-- BEC / payment fraud signal detection
-- Evidence-based recommendations and analyst review workflow
-- Domain intelligence cache
-- Policy-driven quarantine / hold-for-review decisions
-- Framework Center for policies, cases, audit trail, and module status
-- IOC, MITRE, SIEM, playbook, and detection-rule APIs
-- Automatic quarantine folder move
-- Docker-based production-style setup
-
----
-
-## 🐳 Run Locally
-
-```bash
-cp .env.example .env      # then edit the secrets
-docker compose up --build
+```
+Incoming mail ──▶ IMAP watcher ─┐
+Gateway/API   ──▶ /api/v1/emails ┤
+                                 ▼
+                       Detection pipeline
+        heuristics · auth · domain-intel · corpus · BEC · injection
+                     · specialised LLM (when needed)
+                                 ▼
+        Verdict ──▶ Quarantine ──▶ PostgreSQL evidence (IOC/MITRE/timeline)
+                                 ├─▶ SIEM (ECS → Elasticsearch/Kibana)
+                                 └─▶ SSE ──▶ Dashboard (:3000)
 ```
 
-Dashboard (production React SPA): [http://localhost:3001](http://localhost:3001) — modern per-route
-code-split routing, served by nginx with a same-origin `/api` proxy.
-Legacy single-file dashboard: [http://localhost:3000](http://localhost:3000)
-Backend API: [http://localhost:8000](http://localhost:8000)
-Health check: [http://localhost:8000/health](http://localhost:8000/health)
-
-Default login is `admin` / `admin` — **change it immediately** from Settings on first run.
+The `:3000` dashboard serves the UI and **proxies `/api` to the backend same-origin**, so
+JWT session cookies work without CORS gymnastics.
 
 ---
 
-## 🔐 Security & Configuration
-
-ThreatEye ships a live phishing framework (GoPhish) and a mail server, so run it only on
-an isolated network you are authorised to test. Before real use:
-
-1. Copy `.env.example` → `.env` and set `THREATEYE_AUTH_SECRET` and `POSTGRES_PASSWORD`.
-2. Change the default `admin` password.
-3. Lock `CORS_ALLOWED_ORIGINS` to your dashboard origin and terminate TLS at a reverse proxy.
-
-Built-in hardening (login rate limiting, PBKDF2 password hashing, signed session tokens,
-security headers, SPF/DKIM/DMARC scoring, localhost-bound internal services) and the full
-list of known limitations are documented in [SECURITY.md](SECURITY.md).
-
-Key environment variables:
-
-| Variable | Purpose |
-|----------|---------|
-| `THREATEYE_AUTH_SECRET` | Session-token signing key (auto-generated + persisted if unset) |
-| `THREATEYE_LOGIN_MAX_ATTEMPTS` / `THREATEYE_LOGIN_WINDOW_SECONDS` | Login rate-limit tuning |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Database credentials |
-| `AI_MODEL` / `OPENAI_API_BASE` / `OPENAI_API_KEY` | LLM provider (Ollama or OpenAI-compatible) |
-| `GOPHISH_API_KEY` / `GOPHISH_VERIFY_TLS` | GoPhish integration |
-| `SIEM_WEBHOOK_URL` | Optional SOC/SIEM export endpoint |
-| `CORS_ALLOWED_ORIGINS` | Comma-separated allowed dashboard origins |
-
----
-
-## 👥 Users, Roles & Ingestion API (SaaS foundation)
-
-ThreatEye is multi-tenant with role-based access control. Manage users and API keys
-from the **Team & Access** view (admin only).
-
-**Roles** (increasing privilege): `viewer` → `analyst` → `admin` → `owner`
-- `viewer` — read-only dashboards
-- `analyst` — + SOC actions (release/delete/review, empty quarantine, case updates, run simulations)
-- `admin` — + settings, policies, IMAP test, user & API-key management
-- `owner` — + can grant/revoke the `owner` role
-
-**Machine ingestion API** — feed emails from a gateway/connector, authenticated by an
-API key (create one in Team & Access, scoped to your tenant):
+## 🐳 Run locally
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/emails \
-  -H "X-API-Key: tek_xxxxxxxx" \
-  -H "Content-Type: application/json" \
+cp .env.example .env          # then edit the secrets
+docker compose up --build     # core stack
+```
+
+- **Dashboard:** http://localhost:3000
+- **Backend API:** http://localhost:8000  (health: `/health`, ready: `/ready`, metrics: `/metrics`)
+
+Default login is `admin` / `admin` — **change it immediately** in Settings on first run.
+
+**Optional profiles:**
+
+```bash
+docker compose --profile siem up -d elasticsearch kibana   # SIEM (Kibana on :5601)
+./scripts/siem-setup.sh                                     # provision ES index + Kibana view
+docker compose --profile production up                      # Caddy TLS reverse proxy
+```
+
+---
+
+## 🤖 The AI: specialised model + knowledge base
+
+Detection is grounded in an open-source-derived knowledge base, not guesswork.
+
+- **Phishing corpus** (`data/phishing_corpus.json`, `scripts/build_phishing_corpus.py`) —
+  1,210 concrete techniques anchored on the real **MITRE ATT&CK** Enterprise phishing tree
+  (the official STIX bundle), expanded across pretext × brand × evasion × target role.
+- **Labeled dataset** (`scripts/build_dataset.py`) — up to **1,000,000 rows** (phishing +
+  benign) drawn from **Phishing.Database**, **OpenPhish**, **URLhaus** and the top-100k
+  legitimate domains. The big file is reproducible and git-ignored; a sample + stats are
+  committed.
+- **Specialised model** (`scripts/build_phish_model.py`) — builds `threateye-phish:1.1`
+  in Ollama: an expert system brief distilled from the corpus, classifier-tuned decoding,
+  and worked examples, **baked into the model** (Ollama Modelfile) rather than loaded from
+  files. It answers email scoring as JSON and analyst questions as prose.
+- **Validated at scale** — on 700k rows of the 1M dataset the deterministic layer reaches
+  **precision 99.90%, recall 86.21%** (false-positive rate 0.066%). Clear cases resolve in
+  ~1s via a fast path; only genuinely ambiguous mail invokes the LLM.
+- **Model persistence** — `scripts/model-archive.sh export|import` archives the trained
+  model as a tar (the Ollama volume) so it survives `down -v` / a host rebuild / an offline
+  move.
+
+**Closed loop (the project's goal):** the AI generates a phishing lure + landing page, and
+the AI detector catches it — verified live (generated W-2 lure, T1566.001 → quarantined).
+
+Configure the provider from **Settings → AI Engine** (OpenAI / Anthropic / Groq /
+Ollama-local / Custom, model, API key, base URL); **Test AI Connection** runs a real
+completion.
+
+---
+
+## 🔐 Authentication & sessions
+
+- **JWT** (PyJWT, HS256) **access + refresh tokens in httpOnly cookies** — no tokens in
+  `localStorage`. Access token ~15 min, refresh ~7 days with rotation and reuse detection.
+- **CSRF** double-submit: a readable `csrf_token` cookie is echoed in `X-CSRF-Token` on
+  mutating requests; cookie-authed mutations are verified.
+- **Same-origin** via the `:3000` nginx `/api` proxy, so the session is seamless — no
+  re-login on navigation.
+- Login rate-limiting (per-IP sliding window, Redis-backed), PBKDF2-HMAC-SHA256 password
+  storage, generic 401s, masked secrets. See [SECURITY.md](SECURITY.md).
+
+---
+
+## 👥 Users, roles & ingestion API
+
+Multi-tenant with RBAC; manage users and API keys in **Team & Access** (admin only).
+
+**Roles:** `viewer` → `analyst` → `admin` → `owner`
+- `viewer` — read-only dashboards
+- `analyst` — + SOC actions (release/delete/review, empty quarantine, cases, run simulations)
+- `admin` — + settings, policies, IMAP test, user & API-key management
+- `owner` — + grant/revoke `owner`
+
+**Machine ingestion** — feed mail from a gateway/connector with a per-tenant API key:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/emails \
+  -H "X-API-Key: tek_xxxxxxxx" -H "Content-Type: application/json" \
   -d '{
-    "sender": "hr@miicrosoft.com",
+    "sender": "it@0ffice365-reset.com",
     "subject": "Mandatory password reset",
-    "body": "Click http://miicrosoft.com/login to keep your account.",
+    "body": "Reset at http://0ffice365-reset.com/login and enter your password.",
     "recipient": "finance@corp.com",
     "spf": "fail", "dkim": "fail", "dmarc": "fail"
   }'
 ```
 
 Returns the verdict, risk score, threat type, and recommended action; the message is
-persisted with full IOC/MITRE/timeline evidence exactly like watcher-ingested mail.
-
-Schema changes are applied at startup by an ordered SQL migration runner
-(`backend/migrations/`), tracked in the `schema_migrations` table.
+persisted with full IOC/MITRE/timeline evidence, exactly like watcher-ingested mail.
+Schema changes apply at startup via an ordered SQL migration runner (`backend/migrations/`).
 
 ---
 
 ## 🛡 SOC & Blue-Team framework
 
-The **SOC Center** view (and its APIs) give analysts an operational workspace:
+The **SOC Center** view (and its APIs):
 
-- **Triage queue** (`GET /api/triage`) — prioritised P1/P2/P3 worklist of emails needing action, with one-click response.
-- **SLA & metrics** (`GET /api/soc/metrics`) — open cases, SLA breaches, **MTTD/MTTR**. Cases get an SLA target by severity (Critical 60m / High 4h / Medium 24h / Low 72h).
-- **Threat intel** (`/api/intel/indicators`) — per-tenant blocklist/allowlist; a blocklisted IOC in an inbound email forces quarantine. Promote a confirmed phishing email's IOCs with the `block_ioc` action.
-- **ATT&CK coverage** (`GET /api/attack/coverage`) — defended (by enabled rules) vs. observed (in traffic), by tactic. Detection rules are tagged with ATT&CK techniques; the loader reads native `.yaml` **and Sigma-style `.yml`** rules from `backend/rules/`.
-- **Response actions** (`POST /api/emails/{id}/remediate`) — `notify` (Slack/Teams), `ticket` (Jira), `clawback`, `block_ioc`. Every action is recorded in `remediation_actions`.
-- **SIEM normalisation** — export alerts as **ECS** or **OCSF** (or raw) so your SIEM ingests them without a custom parser.
+- **Triage queue** (`GET /api/triage`) — prioritised P1/P2/P3 worklist with one-click response.
+- **SLA & metrics** (`GET /api/soc/metrics`) — open cases, SLA breaches, **MTTD/MTTR**
+  (Critical 60m / High 4h / Medium 24h / Low 72h).
+- **Threat intel** (`/api/intel/indicators`) — per-tenant blocklist/allowlist; a blocklisted
+  IOC forces quarantine. Promote a confirmed email's IOCs with `block_ioc`.
+- **ATT&CK coverage** (`GET /api/attack/coverage`) — defended vs observed, by tactic. Rules
+  are tagged with ATT&CK techniques; the loader reads native `.yaml` and Sigma-style `.yml`.
+- **Response actions** (`POST /api/emails/{id}/remediate`) — `notify`, `ticket`, `clawback`,
+  `block_ioc`, recorded in `remediation_actions`.
+- **Phishing corpus API** — `GET /api/corpus/stats`, `GET /api/corpus/techniques`.
 
 ---
 
-## 🎣 Phishing simulation (GoPhish) — AI-automated & manual
+## 🔌 SIEM integration (Elasticsearch + Kibana)
 
-Test which employees fall for phishing, broken down by department.
+Quarantine alerts are forwarded to your SIEM in real time, **non-blocking**, with retry and
+a **replay** for failed deliveries — all configured in **Settings → Integrations**.
 
-1. **Configure GoPhish** — set the GoPhish URL + API key in Settings (or `GOPHISH_URL` / `GOPHISH_API_KEY`). The bundled `gophish` service and `mail_server` work out of the box in the lab.
-2. **Import the roster** (Simulation view → *Employee Roster*) — a CSV with headers:
+```bash
+docker compose --profile siem up -d elasticsearch kibana
+./scripts/siem-setup.sh          # ECS index template + Kibana data view
+```
 
-   ```csv
-   email,first_name,last_name,department
-   john.doe@corp.com,John,Doe,Finance
-   jane.roe@corp.com,Jane,Roe,Sales
-   ```
+Then set **Webhook URL** `http://elasticsearch:9200/threateye-alerts/_doc`, **Format** ECS.
+Alerts are searchable in Kibana (:5601) → Discover → *ThreatEye Alerts*. Formats: `raw` /
+**ECS** (Elastic) / **OCSF**. `siem_min_score` also forwards delivered-but-suspicious mail;
+`POST /api/siem-events/replay` re-sends failed deliveries.
 
-   Header aliases (`mail`, `name`, `dept`, `team`, `position`…) are auto-detected, and a plain one-email-per-line file also works.
-3. **Launch a campaign:**
-   - **AI Automated** — the LLM writes the lure; targets come from the roster (optionally one department / a random sample). Flip **Automated scheduled campaigns** on (`sim_auto_enabled`) to have it run every 24h.
-   - **Manual** — upload a CSV (also saved to the roster) or reuse the roster, then launch.
-4. **Track engagement** — the Simulation view shows emails sent / opened / clicked / submitted, a **department-vulnerability** table, and the exact **employees who clicked**. GoPhish provisions the sending profile, landing page, and campaign automatically.
+---
 
-API: `POST /api/simulations/targets/upload`, `GET /api/simulations/targets`, `POST /api/simulations/trigger` (`mode=AI|Manual`), `GET /api/simulations/results`.
+## 🎣 Phishing simulation (GoPhish) — fully AI-driven
 
-Simulation settings (defaults target the lab services): `SIM_SMTP_HOST`, `SIM_SMTP_FROM`, `SIM_PHISH_URL`.
+Test which employees fall for phishing, by department — with the AI running the whole
+campaign.
+
+1. **Configure GoPhish** — set the URL + API key in Settings (or `GOPHISH_URL` /
+   `GOPHISH_API_KEY`). The bundled `gophish` + `mail_server` work out of the box.
+2. **Import the roster** (Simulations → *Employee Roster*): CSV with `email, first_name,
+   last_name, department` (header aliases auto-detected; a plain email-per-line list works).
+3. **Launch:**
+   - **AI Automated** — the model picks a role-aware ATT&CK technique, writes the lure **and
+     the brand-matched credential-capture landing page**, and launches. Flip **Automated
+     scheduled campaigns** on to run every 24h.
+   - **Manual** — upload a CSV (also saved to the roster) or reuse the roster.
+4. **Track engagement** — GoPhish records the **click** (page load) and **data-entry** (form
+   submit), Burp-Collaborator-style, then redirects. The Simulations view shows sent /
+   opened / clicked / submitted, a **department-vulnerability** table, and the exact
+   employees who clicked. Each campaign carries the ATT&CK technique it modelled.
+
+API: `POST /api/simulations/targets/upload`, `POST /api/simulations/trigger`
+(`mode=AI|Manual`), `GET /api/simulations/results`.
 
 ---
 
 ## 🧩 Detection plugins (`.tap`)
 
 Extend detection without code. A **`.tap`** file is a JSON pack of *declarative* content —
-detection rules, threat-intel indicators, and playbooks — with **no executable code**, so
-third-party packs are safe to install. Upload from **Settings → Plugins** (`POST /api/plugins/upload`,
-admin); content goes live immediately. Optional HMAC signing marks packs trusted. Format spec:
-[`docs/TAP_FORMAT.md`](docs/TAP_FORMAT.md); sample: [`plugins/samples/emotet-pack.tap`](plugins/samples/emotet-pack.tap).
-
-## 🤖 AI provider (GUI-configurable)
-
-Set the model from **Settings → AI Engine**: provider (OpenAI / Anthropic / Groq / Ollama-local /
-Custom), model, API key, and base URL — resolved live per request. The **Test AI Connection** button
-runs a real completion (`POST /api/settings/test-ai`). Any OpenAI-compatible endpoint works.
+detection rules, threat-intel indicators, and playbooks — with **no executable code**.
+Upload from **Settings → Plugins** (`POST /api/plugins/upload`, admin); content goes live
+immediately. Optional HMAC signing marks packs trusted. Spec:
+[`docs/TAP_FORMAT.md`](docs/TAP_FORMAT.md); sample:
+[`plugins/samples/emotet-pack.tap`](plugins/samples/emotet-pack.tap).
 
 ---
 
-## 🧠 Adaptive learning (feedback loop)
+## 🧠 Adaptive learning, attachments, reports, copilot
 
-Analyst decisions and simulation outcomes tune future detection:
-
-- Marking an email **Confirmed Phishing** lowers the sender/URL-domain reputation and blocklists its IOCs; marking it **Safe** raises the sender's reputation so it stops being re-flagged. Learned reputation adjusts the risk score at ingest (`framework/learning.py`).
-- **Sync sim behaviour** (`POST /api/simulations/sync-behavior`) raises the behavioural risk of employees who clicked in a simulation — the detector then scrutinises their inbound mail more closely.
-- See it in the SOC Center **Adaptive Learning** card, or `GET /api/learning/summary` · `GET /api/learning/reputation`.
-
----
-
-## 🧪 Attachment analysis, reported phishing, clustering & AI copilot
-
-- **Attachment malware analysis** — every attachment is scanned: file-type (magic bytes), dangerous/double extensions, disguised executables, PDF active content, archive contents, Office macros (`oletools`), SHA-256 blocklist reputation, and optional ClamAV (`CLAMAV_TCP=host:port`). Malicious attachments force quarantine.
-- **User-reported phishing** — `POST /api/report-phishing` (forwarded email → auto-triaged report); `GET /api/reports`.
-- **Campaign clustering** — `GET /api/campaigns/clusters` groups related inbound threats so you triage a campaign, not 200 alerts.
-- **AI SOC copilot** — ask questions grounded in your data (SOC Center chat / `POST /api/copilot`), and get an AI-written **investigation** per email (`GET /api/emails/{id}/investigate`, or the "AI Investigate" button). Both fall back to a deterministic summary when no LLM is reachable.
+- **Adaptive learning** — marking **Confirmed Phishing** lowers sender/URL-domain reputation
+  and blocklists its IOCs; **Safe** raises reputation. Sim clickers get higher behavioural
+  risk (`POST /api/simulations/sync-behavior`). `GET /api/learning/summary`.
+- **Attachment malware analysis** — magic bytes, dangerous/double extensions, PDF active
+  content, archives, Office macros (`oletools`), SHA-256 blocklist, optional ClamAV
+  (`CLAMAV_TCP`). Malicious attachments force quarantine.
+- **User-reported phishing** — `POST /api/report-phishing`; `GET /api/reports`.
+- **Campaign clustering** — `GET /api/campaigns/clusters` groups related threats.
+- **AI SOC copilot** — grounded Q&A (`POST /api/copilot`) and per-email AI investigation
+  (`GET /api/emails/{id}/investigate`); deterministic fallback when no LLM is reachable.
 
 ---
 
 ## 🏗 Platform (tests, metrics, Redis, TLS)
 
-- **Tests + CI:** `cd backend && pytest` (32 unit tests); GitHub Actions runs compile + tests + compose validation on every push.
-- **Observability:** Prometheus metrics at `/metrics`, readiness at `/ready`, liveness at `/health`; `LOG_LEVEL` controls structured logs.
-- **Redis:** shared login rate-limiting across replicas (`REDIS_URL`); safe in-process fallback when unset.
-- **TLS:** `docker compose --profile production up` adds a Caddy reverse proxy (`Caddyfile`) terminating HTTPS in front of the dashboard + API.
+- **Tests + CI:** `docker compose exec backend python -m pytest` (**40 tests**); GitHub
+  Actions runs compile + tests + compose validation.
+- **Observability:** Prometheus metrics at `/metrics`, `/ready`, `/health`; `LOG_LEVEL`
+  controls structured logs.
+- **Redis:** shared login rate-limiting across replicas (`REDIS_URL`); in-process fallback
+  when unset.
+- **TLS:** `docker compose --profile production up` adds a Caddy reverse proxy (`Caddyfile`)
+  terminating HTTPS in front of the dashboard + API.
 
-The dashboard is also being ported to **Vite + React + TypeScript** in [`frontend-react/`](frontend-react) (typed API client, auth, routing, and core pages) — a maintainable migration target; the shipping UI remains `frontend/`.
-
----
-
-## 🔌 Response / SIEM integrations
-
-Response/SIEM integrations are configured as settings (all optional; unconfigured = safely skipped). Real mailbox **clawback** uses Microsoft 365 Graph or Google Workspace when configured:
-
-| Setting | Purpose |
-|---------|---------|
-| `siem_format` | `raw` \| `ecs` \| `ocsf` export schema |
-| `slack_webhook_url` / `teams_webhook_url` | Chat notifications for `notify` |
-| `jira_url` / `jira_token` / `jira_project` | Ticket creation for `ticket` |
-| `m365_tenant_id` / `m365_client_id` / `m365_client_secret` / `m365_mailboxes` | Real M365 Graph clawback (app needs `Mail.ReadWrite`) |
-| `google_sa_json` / `google_mailboxes` | Real Google Workspace clawback (service account, domain-wide delegation) |
-| `remediation_webhook_url` | Fallback target for `clawback` dispatch |
+The `frontend-react/` directory holds a Vite + React + TS port of the UI; it is kept in the
+repo but **not run** — the shipping dashboard is `frontend/` on `:3000`.
 
 ---
 
-## ⚙ Tech Stack
+## ⚙ Key environment variables
 
-* FastAPI
-* Docker
-* Dovecot
-* Postfix
-* Ollama (default model: GLM 4.5 via `glm-4.5`, configurable with `AI_MODEL` / `OLLAMA_MODEL`)
-* PostgreSQL
-* GoPhish
+| Variable | Purpose |
+|----------|---------|
+| `THREATEYE_AUTH_SECRET` | JWT signing key (auto-generated + persisted if unset) |
+| `COOKIE_SECURE` / `COOKIE_SAMESITE` | Session-cookie flags (set `COOKIE_SECURE=true` behind TLS) |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Database credentials |
+| `AI_MODEL` / `OPENAI_API_BASE` / `OPENAI_API_KEY` | LLM provider (default `threateye-phish:1.1` on Ollama) |
+| `GOPHISH_API_KEY` / `GOPHISH_URL` / `GOPHISH_VERIFY_TLS` | GoPhish integration |
+| `SIEM_WEBHOOK_URL` / `SIEM_FORMAT` | SIEM export (also settable in Settings) |
+| `REDIS_URL` / `CLAMAV_TCP` | Shared rate-limit state / optional attachment AV |
 
 ---
 
-## 📌 Project Goal
+## 🧱 Tech stack
 
-Build a realistic enterprise-style email security lab environment with AI-driven phishing detection and automated quarantine workflows.
+FastAPI · PostgreSQL · Redis · Ollama (`threateye-phish:1.1`, base qwen2.5:3b) ·
+docker-mailserver (Postfix/Dovecot) · GoPhish · Elasticsearch + Kibana · nginx · Caddy.
+
+---
+
+## 📌 Project goal
+
+A realistic, self-hosted email-security lab where AI-driven detection catches AI-crafted
+phishing — with the SOC workflow, phishing simulations, and SIEM integration a blue team
+actually needs. **Authorized use only:** it ships a live phishing framework and mail server;
+run it on an isolated network you control.
