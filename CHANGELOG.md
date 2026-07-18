@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.17.2] - 2026-07-19
+### Changed — removed the redundant :3001 React dashboard service
+The `dashboard` service (React SPA on `127.0.0.1:3001`) duplicated the main dashboard on
+`:3000` and is no longer run. Removed it from `docker-compose.yml` and stopped the
+container. The `:3000` frontend is now the single dashboard (it already proxies `/api`
+same-origin, so it stands alone). The `frontend-react/` source stays in the repo; the
+production Caddy profile already proxies to `frontend`, so nothing else changes.
+
 ## [1.17.1] - 2026-07-19
 ### Fixed — brief login flash on navigation; session now restores seamlessly
 Even with a valid session, clicking a nav item could flash the login screen for a few

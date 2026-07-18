@@ -127,21 +127,12 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # Production dashboard: the React SPA (modern per-route code-split routing),
-  # served by nginx which also reverse-proxies /api to the backend (same-origin).
-  dashboard:
-    build:
-      context: ./frontend-react
-      # Host networking so npm can reach the registry during the build.
-      network: host
-    container_name: threateye_dashboard
-    ports:
-      - "3001:80"
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  # Legacy single-file dashboard (frontend/app.js) — kept for reference.
+  # The dashboard (frontend/app.js) — nginx serves the UI and proxies /api to the
+  # backend (same-origin, so session cookies work). This is the only dashboard.
+  #
+  # The React SPA in ./frontend-react is kept in the repo but is NOT run as a service
+  # (it duplicated this one on :3001). To bring it back, add a service building
+  # ./frontend-react on another port.
   frontend:
     build:
       context: ./frontend
