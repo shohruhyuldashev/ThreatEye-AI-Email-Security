@@ -25,6 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showApp(authed) {
+        const checking = document.getElementById('login-checking');
+        const card = document.getElementById('login-card');
         if (authed) {
             loginOverlay.classList.add('opacity-0', 'pointer-events-none');
             setTimeout(() => {
@@ -32,6 +34,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 mainApp.classList.remove('opacity-0', 'pointer-events-none');
             }, 300);
         } else {
+            // Confirmed unauthenticated: reveal the login form, hide the checking spinner.
+            if (checking) checking.classList.add('hidden');
+            if (card) card.classList.remove('hidden');
             loginOverlay.classList.remove('hidden', 'opacity-0', 'pointer-events-none');
             mainApp.classList.add('opacity-0', 'pointer-events-none');
         }
@@ -39,14 +44,34 @@ document.addEventListener('DOMContentLoaded', () => {
     // Called on 401/logout to drop back to the login overlay.
     function checkAuth() { showApp(false); }
 
+    // Single-flight refresh: many view widgets fire their fetches at once, so a stale
+    // access token produces a burst of parallel 401s. Without coalescing, each one would
+    // POST /auth/refresh and rotate the refresh token — the second rotation trips the
+    // server's refresh-reuse detection, one call fails, and the app bounces to login for
+    // a few milliseconds. Sharing one in-flight refresh keeps the session seamless.
+    let _refreshInFlight = null;
+    function refreshSession() {
+        if (!_refreshInFlight) {
+            _refreshInFlight = fetch(`${API_BASE}/auth/refresh`, {
+                method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': getCsrf() }
+            })
+                .then(async (r) => {
+                    if (r.ok) { csrfToken = (await r.json()).csrf_token || csrfToken; return true; }
+                    return false;
+                })
+                .catch(() => false)
+                .finally(() => { _refreshInFlight = null; });
+        }
+        return _refreshInFlight;
+    }
+
     async function bootstrapAuth() {
         try {
             let res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
             if (!res.ok) {
-                const r = await fetch(`${API_BASE}/auth/refresh`, {
-                    method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': getCsrf() }
-                });
-                if (r.ok) { csrfToken = (await r.json()).csrf_token || csrfToken; res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' }); }
+                if (await refreshSession()) {
+                    res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
+                }
             }
             if (res.ok) { showApp(true); initializeApp(); return; }
         } catch (_) { /* fall through to login */ }
@@ -1085,11 +1110,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const method = (options.method || 'GET').toUpperCase();
         if (MUTATING_METHODS.includes(method)) headers.set('X-CSRF-Token', getCsrf());
         let res = await fetch(url, { ...options, headers, credentials: 'include' });
-        // Access token expired → refresh once (rotating cookies) and retry.
+        // Access token expired → refresh once (shared, single-flight) and retry. Using the
+        // shared refresh means a burst of parallel 401s from one view triggers exactly one
+        // rotation, so the session is restored silently instead of flashing the login.
         if (res.status === 401 && _retry && !url.includes('/auth/')) {
-            const r = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': getCsrf() } });
-            if (r.ok) {
-                csrfToken = (await r.json()).csrf_token || csrfToken;
+            if (await refreshSession()) {
                 return apiFetch(url, options, false);
             }
         }

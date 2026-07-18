@@ -55,7 +55,14 @@
 
     <!-- Login Overlay -->
     <div id="login-overlay" class="fixed inset-0 z-[100] bg-cyber-dark flex items-center justify-center transition-opacity duration-300">
-        <div class="glass-card rounded-xl p-8 max-w-sm w-full mx-4 border border-cyber-border shadow-[0_0_30px_rgba(0,255,157,0.1)]">
+        <!-- Shown while the existing session is being checked, so a valid session
+             never flashes the login form on load or navigation. -->
+        <div id="login-checking" class="flex flex-col items-center gap-4 text-center">
+            <i class="fa-solid fa-shield-halved text-cyber-neon text-4xl"></i>
+            <div class="w-6 h-6 border-2 border-cyber-border border-t-cyber-neon rounded-full animate-spin"></div>
+            <p class="text-xs text-gray-500 uppercase tracking-widest">Restoring session…</p>
+        </div>
+        <div id="login-card" class="glass-card rounded-xl p-8 max-w-sm w-full mx-4 border border-cyber-border shadow-[0_0_30px_rgba(0,255,157,0.1)] hidden">
             <div class="text-center mb-8">
                 <i class="fa-solid fa-shield-halved text-cyber-neon text-4xl mb-4 shadow-cyber-neon/50"></i>
                 <h2 class="text-2xl font-bold text-white tracking-wide">Threat<span class="text-cyber-neon">Eye</span></h2>
@@ -237,7 +244,7 @@
 
     </div> <!-- End Main App Content -->
 
-    <script src="app.js?v=22"></script>
+    <script src="app.js?v=23"></script>
 </body>
 
 </html>

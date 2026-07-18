@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.17.1] - 2026-07-19
+### Fixed — brief login flash on navigation; session now restores seamlessly
+Even with a valid session, clicking a nav item could flash the login screen for a few
+milliseconds. Two causes, both fixed:
+- **Login form shown before the auth check finished.** On load/navigation the login
+  overlay rendered the sign-in form immediately, then `/auth/me` resolved and hid it. The
+  overlay now shows a neutral **"Restoring session…" spinner** and only reveals the login
+  form once the session is confirmed absent — a valid session never sees the form.
+- **Parallel 401s each rotated the refresh token.** A view fires several fetches at once,
+  so an expired access token produced a burst of 401s; each independently POSTed
+  `/auth/refresh`, and the second rotation tripped the server's refresh-reuse detection,
+  failing one call and bouncing to login. Refresh is now **single-flight** — the burst
+  shares one rotation and every request retries silently, so the session stays put.
+
 ## [1.17.0] - 2026-07-18
 ### Fixed — session cookies dropped; every click asked for a fresh login (critical)
 The real cause was cross-origin: the page on `:3000` called the API at
