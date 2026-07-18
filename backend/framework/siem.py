@@ -35,6 +35,7 @@ SIEM_RETRIES = int(os.getenv("SIEM_RETRIES", "3"))
 
 _SIEM_KEYS = (
     "siem_webhook_url", "siem_api_key", "siem_auth_header", "siem_auth_prefix", "siem_format",
+    "siem_min_score",
 )
 
 
@@ -57,7 +58,24 @@ def siem_config() -> dict[str, str]:
         "auth_prefix": settings.get("siem_auth_prefix") if settings.get("siem_auth_prefix") is not None
         else os.getenv("SIEM_AUTH_PREFIX", "Bearer "),
         "format": (settings.get("siem_format") or os.getenv("SIEM_FORMAT", "raw")).lower(),
+        "min_score": _int(settings.get("siem_min_score") or os.getenv("SIEM_MIN_SCORE", "40"), 40),
     }
+
+
+def _int(value: Any, default: int) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def siem_min_score() -> int:
+    """
+    Lowest risk score that is still worth forwarding. Emails at or above the
+    quarantine threshold always go; this covers the band below it, so
+    "suspicious but delivered" mail is visible to the SOC instead of invisible.
+    """
+    return siem_config()["min_score"]
 
 
 def _auth_headers(cfg: dict[str, str]) -> dict[str, str]:
@@ -113,6 +131,46 @@ def _deliver_with_retry(event_type: str, payload: dict[str, Any]) -> None:
         conn.close()
     except Exception as e:
         logger.error("Failed to record SIEM event: %s", e)
+
+
+def replay_failed(limit: int = 50) -> dict[str, Any]:
+    """
+    Re-dispatch alerts whose delivery ultimately failed (SIEM was down, network
+    blip, bad token). Without this a failed alert is logged and then lost, which
+    is exactly the alert you least want to lose. Replayed rows are marked so a
+    second call doesn't send them twice; a fresh failure lands as a new row and
+    stays replayable.
+    """
+    try:
+        conn = get_db_connection()
+        c = conn.cursor()
+        c.execute(
+            "SELECT id, event_type, payload_json FROM siem_events "
+            "WHERE status = 'failed' ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        rows = c.fetchall()
+    except Exception as e:
+        logger.error("SIEM replay query failed: %s", e)
+        return {"replayed": 0, "error": str(e)}
+
+    replayed, skipped = 0, 0
+    for row in rows:
+        try:
+            payload = json.loads(row["payload_json"])
+        except Exception:
+            skipped += 1
+            continue
+        export_siem_event(row["event_type"], payload)
+        c.execute("UPDATE siem_events SET status = 'replayed' WHERE id = ?", (row["id"],))
+        replayed += 1
+
+    try:
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+    return {"replayed": replayed, "skipped": skipped}
 
 
 def export_siem_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:

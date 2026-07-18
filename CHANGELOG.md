@@ -1,5 +1,63 @@
 # Changelog
 
+## [1.15.0] - 2026-07-18
+### Fixed — detection was letting obvious phishing through (critical)
+A live end-to-end test caught a credential-phishing email — Office 365 lookalike
+domain, SPF **and** DKIM **and** DMARC all failing, password-harvesting body —
+being scored **30/100 and delivered**. Three independent defects combined:
+
+- **The brand list was too small.** Typosquat detection knew only 7 brands
+  (`microsoft, google, apple, amazon, paypal, netflix, facebook`), so
+  `0ffice365-reset.com` and `docusign-secure-sign.com` scored **0** on domain
+  intel. Expanded to the brands actually impersonated in credential phishing: the
+  Microsoft 365 surface (`office365`, `outlook`, `onedrive`, `sharepoint`, …),
+  major SaaS/identity providers, finance, and shipping.
+- **Strong signals were diluted by the weighted average.** The blend
+  (`heuristics×0.22 + auth×0.10 + domain×0.20 + llm×0.20 + …`) averaged an LLM
+  verdict of 82/100 together with a full authentication failure down to 30. Added
+  decisive-signal floors: a confident model verdict (`llm_score ≥ 70` at
+  `confidence ≥ 60`) is no longer averaged away, and SPF+DKIM+DMARC all failing
+  floors the score at 60 on its own — 85 alongside a lookalike domain or heuristic
+  hits. Authentication is deterministic, so this holds even when the LLM is slow,
+  wrong, or unavailable.
+- **Agent scores came back on the wrong scale.** The prompt specified 0-100 for
+  `llm_score` but left the per-agent scores unlabelled, so smaller models answered
+  0-10 — an analyst saw `score: 10` next to the verdict "High risk". The prompt now
+  states the 0-100 scale with band anchors for every score field.
+
+Verified after the fix — the missed email is now **Quarantined at 85**, an Office 365
+lookalike at **90**, a DocuSign lookalike at **85**, while legitimate mail (internal
+colleague, vendor newsletter with `dkim=none`, genuine Microsoft security notice)
+stays **Allowed at 2-10**. No false positives introduced.
+
+Also fixed: the domain-intel cache had stored the pre-fix zero scores and
+short-circuited re-analysis, so a poisoned entry outlived the fix.
+
+### Added — real SIEM integration (Elasticsearch + Kibana)
+- `docker compose --profile siem up -d elasticsearch kibana` brings up a working SIEM
+  beside the stack; ThreatEye forwards ECS alerts to
+  `http://elasticsearch:9200/threateye-alerts/_doc`.
+- `scripts/siem-setup.sh` provisions it idempotently: an ECS-aligned **index template**
+  (so fields get real types rather than whatever dynamic mapping infers from the first
+  document — a wrong inference is permanent for that index), the backing index, and a
+  Kibana **data view** on `@timestamp`.
+- Verified end-to-end: phishing email → detection → quarantine → SIEM dispatch →
+  searchable in Kibana, with `event.action` / `labels.threat_type` aggregations working.
+
+### Added — SIEM coverage and recovery gaps closed
+- **`siem_min_score` setting.** Only *quarantined* mail used to reach the SIEM, leaving
+  everything under the quarantine bar invisible — precisely the band worth hunting over.
+  Delivered mail scoring at or above this value (default 40) is now forwarded as
+  `threateye.email_suspicious`. Configurable in Settings → Integrations.
+- **Replay for failed deliveries.** Once the 3 retries were exhausted an alert was logged
+  `failed` and then lost — the alert you least want to lose. Added `POST /siem-events/replay`
+  and a **Replay Failed** button; replayed rows are marked so a second call can't double-send.
+
+### Fixed
+- `test_sample_plugin_parses` failed inside the container because only `backend/` was
+  mounted, so the repo-relative sample path resolved to `/plugins`. That directory is now
+  mounted read-only into the backend. Suite: **40/40 passing**.
+
 ## [1.14.1] - 2026-07-06
 ### Changed — Real-Time Monitor rebuilt as full-width table + slide-over drawer
 - The Monitor's data table was cramped into a **2/3-width** column beside a sticky detail sidebar, squeezing its 7 columns horizontally. The table is now **full width** so every column has room, and the per-email **AI analysis opens in a right-hand slide-over drawer** (Datadog/Sentry pattern) with a backdrop, close button and `Esc`-to-close. The drawer is mounted on `<body>` so `position:fixed` isn't trapped by the view's fade-in transform. All detail IDs (`monitor-detail-content`, `monitor-detail-actions`) and their populate/action logic are unchanged.

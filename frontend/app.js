@@ -863,7 +863,15 @@ document.addEventListener('DOMContentLoaded', () => {
                                             <input type="text" id="setting-siem-auth-prefix" class="cyber-input w-full p-2.5 rounded-lg text-sm" placeholder="Bearer / Splunk / ApiKey">
                                         </div>
                                     </div>
-                                    <button type="button" onclick="testSiemConnection()" class="text-xs bg-cyber-panel border border-cyber-border hover:border-cyber-info hover:text-cyber-info text-gray-300 px-3 py-2 rounded-lg transition-colors"><i class="fa-solid fa-paper-plane mr-1.5"></i> Send Test Alert</button>
+                                    <div>
+                                        <label class="block text-xs text-gray-400 uppercase tracking-widest mb-1.5">Minimum Risk Score to Forward</label>
+                                        <input type="number" id="setting-siem-min-score" min="1" max="100" class="cyber-input w-full sm:w-40 p-2.5 rounded-lg text-sm" placeholder="40">
+                                        <p class="text-[11px] text-gray-500 mt-1">Quarantined mail is always forwarded. This also forwards <span class="text-gray-400">delivered</span> mail scoring at or above this value, so "suspicious but under the bar" stays visible for hunting.</p>
+                                    </div>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button type="button" onclick="testSiemConnection()" class="text-xs bg-cyber-panel border border-cyber-border hover:border-cyber-info hover:text-cyber-info text-gray-300 px-3 py-2 rounded-lg transition-colors"><i class="fa-solid fa-paper-plane mr-1.5"></i> Send Test Alert</button>
+                                        <button type="button" onclick="replaySiemEvents()" class="text-xs bg-cyber-panel border border-cyber-border hover:border-cyber-warning hover:text-cyber-warning text-gray-300 px-3 py-2 rounded-lg transition-colors"><i class="fa-solid fa-rotate-right mr-1.5"></i> Replay Failed</button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1743,6 +1751,24 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (e) {
             await showCustomAlert("Network error while testing SIEM.", "Error", true);
+        }
+    };
+
+    window.replaySiemEvents = async function () {
+        // Re-sends alerts that ultimately failed to reach the SIEM (it was down,
+        // token was wrong, network blip) so they aren't silently lost.
+        try {
+            const res = await apiFetch(`${API_BASE}/siem-events/replay`, { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                await showCustomAlert(
+                    data.replayed ? `\u2713 Re-sent ${data.replayed} failed alert(s).` : "No failed alerts to replay.",
+                    "SIEM Replay", false);
+            } else {
+                await showCustomAlert(data.detail || "Replay failed.", "SIEM Replay Failed", true);
+            }
+        } catch (e) {
+            await showCustomAlert("Network error during replay.", "Error", true);
         }
     };
 
@@ -2988,6 +3014,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 setVal('setting-siem-auth-header', data.siem_auth_header);
                 setVal('setting-siem-auth-prefix', data.siem_auth_prefix);
                 setVal('setting-siem-format', data.siem_format || 'raw');
+                setVal('setting-siem-min-score', data.siem_min_score || '40');
             }
         } catch (e) {
             console.error("Failed to load settings:", e);
@@ -3011,7 +3038,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     siem_webhook_url: val('setting-siem-url'),
                     siem_auth_header: val('setting-siem-auth-header'),
                     siem_auth_prefix: val('setting-siem-auth-prefix'),
-                    siem_format: val('setting-siem-format')
+                    siem_format: val('setting-siem-format'),
+                    siem_min_score: val('setting-siem-min-score') || '40'
                 };
                 // Only send secrets when the user actually typed one (blank = keep existing).
                 const imapPass = val('setting-imap-pass'); if (imapPass) payload.imap_pass = imapPass;

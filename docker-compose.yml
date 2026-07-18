@@ -95,6 +95,9 @@ services:
     volumes:
       - ./backend:/app
       - ./uploads:/app/uploads
+      # Sample .tap packs, mounted where the repo-relative test path resolves to
+      # inside the container (/app/tests/../../plugins).
+      - ./plugins:/plugins:ro
     environment:
       - GOPHISH_URL=http://gophish:3333
       - GOPHISH_API_KEY=${GOPHISH_API_KEY:-}
@@ -182,9 +185,66 @@ services:
       - frontend
     restart: unless-stopped
 
+  # --------------------------------------------------------------------------
+  # SIEM (optional): Elasticsearch + Kibana. Start with:
+  #   docker compose --profile siem up -d elasticsearch kibana
+  # ThreatEye forwards ECS-formatted alerts to http://elasticsearch:9200/threateye-alerts/_doc
+  #
+  # NOTE: security is DISABLED here because this is a self-contained lab stack.
+  # For anything internet-facing, enable xpack.security and put a real API key
+  # in Settings -> SIEM (ThreatEye already sends a configurable auth header).
+  # --------------------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.3
+    container_name: threateye_elasticsearch
+    profiles: ["siem"]
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - ingest.geoip.downloader.enabled=false
+    ulimits:
+      memlock: { soft: -1, hard: -1 }
+      nofile: { soft: 65536, hard: 65536 }
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+    mem_limit: 2g
+    restart: unless-stopped
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.3
+    container_name: threateye_kibana
+    profiles: ["siem"]
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_PUBLICBASEURL=http://localhost:5601
+    ports:
+      - "5601:5601"
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:5601/api/status >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+    mem_limit: 1500m
+    restart: unless-stopped
+
 volumes:
   gophish_data:
   ollama_data:
   postgres_data:
   caddy_data:
   caddy_config:
+  es_data:
