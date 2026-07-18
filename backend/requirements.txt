@@ -19,3 +19,4 @@ redis
 pyjwt
 google-api-python-client
 google-auth
+pytest

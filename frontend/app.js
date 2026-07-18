@@ -9,9 +9,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let appInitialized = false;
 
     // Auth: the session lives in httpOnly JWT cookies (access + refresh). We keep the
-    // CSRF token (returned by login/refresh) in memory to echo on mutating requests —
-    // this cross-origin page can't read the backend's csrf_token cookie directly.
+    // CSRF token echoed on mutating requests (double-submit).
+    //
+    // The login/refresh response body carries it, but that copy only lives in this
+    // variable — a page reload wipes it. The `csrf_token` cookie is deliberately
+    // non-httpOnly and host-only (no Domain, Path=/), and cookies ignore ports, so
+    // this page can read the one the backend set even though it is served from a
+    // different port. Read it back on every use: after a reload it is the only copy
+    // left, and without it the refresh call fails CSRF and the session dies.
     let csrfToken = '';
+
+    function getCsrf() {
+        const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : csrfToken;
+    }
 
     function showApp(authed) {
         if (authed) {
@@ -33,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
             let res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' });
             if (!res.ok) {
                 const r = await fetch(`${API_BASE}/auth/refresh`, {
-                    method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': csrfToken }
+                    method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': getCsrf() }
                 });
                 if (r.ok) { csrfToken = (await r.json()).csrf_token || csrfToken; res = await fetch(`${API_BASE}/auth/me`, { credentials: 'include' }); }
             }
@@ -298,7 +309,10 @@ document.addEventListener('DOMContentLoaded', () => {
                         <h2 class="text-2xl font-bold text-white">Phishing Simulation</h2>
                         <p class="text-sm text-gray-400 mt-1">Upload employees, launch AI or manual GoPhish campaigns, and track who clicks — by department.</p>
                     </div>
-                    <span id="sim-gophish-status" class="text-xs px-3 py-1.5 rounded-full border border-cyber-border text-gray-400">GoPhish: checking…</span>
+                    <div class="flex items-center gap-2">
+                        <span id="sim-corpus-badge" class="text-xs px-3 py-1.5 rounded-full border border-cyber-neon/40 text-cyber-neon" title="Simulations draw from ThreatEye's MITRE-anchored phishing technique library">Corpus: …</span>
+                        <span id="sim-gophish-status" class="text-xs px-3 py-1.5 rounded-full border border-cyber-border text-gray-400">GoPhish: checking…</span>
+                    </div>
                 </div>
 
                 <!-- Results (top KPI row) -->
@@ -915,7 +929,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     window.logout = async function () {
         try {
-            await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': csrfToken } });
+            await fetch(`${API_BASE}/auth/logout`, { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': getCsrf() } });
         } catch (_) { /* ignore */ }
         csrfToken = '';
         appInitialized = false;
@@ -1065,11 +1079,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function apiFetch(url, options = {}, _retry = true) {
         const headers = new Headers(options.headers || {});
         const method = (options.method || 'GET').toUpperCase();
-        if (MUTATING_METHODS.includes(method)) headers.set('X-CSRF-Token', csrfToken);
+        if (MUTATING_METHODS.includes(method)) headers.set('X-CSRF-Token', getCsrf());
         let res = await fetch(url, { ...options, headers, credentials: 'include' });
         // Access token expired → refresh once (rotating cookies) and retry.
         if (res.status === 401 && _retry && !url.includes('/auth/')) {
-            const r = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': csrfToken } });
+            const r = await fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include', headers: { 'X-CSRF-Token': getCsrf() } });
             if (r.ok) {
                 csrfToken = (await r.json()).csrf_token || csrfToken;
                 return apiFetch(url, options, false);
@@ -2839,6 +2853,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function setupSimulationTriggers() {
         switchSimMode('AI');
+
+        // Show how much technique knowledge simulations draw from.
+        try {
+            const cs = await (await apiFetch(`${API_BASE}/corpus/stats`)).json();
+            const badge = document.getElementById('sim-corpus-badge');
+            if (badge && cs.loaded) {
+                badge.textContent = `Corpus: ${cs.techniques} techniques · ${cs.attack_techniques} ATT&CK`;
+                badge.title = `Simulations pick a lure from ${cs.techniques} MITRE-anchored phishing patterns across ${cs.lures} pretext families`;
+            } else if (badge) {
+                badge.textContent = 'Corpus: not loaded';
+                badge.className = 'text-xs px-3 py-1.5 rounded-full border border-cyber-danger/40 text-cyber-danger';
+            }
+        } catch (_) { /* ignore */ }
 
         const rosterForm = document.getElementById('roster-upload-form');
         if (rosterForm) {

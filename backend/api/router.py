@@ -1349,6 +1349,34 @@ def attack_coverage(_auth: dict = Depends(require_auth)):
     from framework.attack import get_coverage
     return get_coverage(_org_id(_auth))
 
+# ------------------------------- Phishing corpus --------------------------------
+@router.get("/corpus/stats")
+def corpus_statistics(_auth: dict = Depends(require_auth)):
+    """What phishing knowledge the detector currently has loaded."""
+    from framework.phish_corpus import corpus_stats
+    return corpus_stats()
+
+@router.get("/corpus/techniques")
+def corpus_techniques(
+    lure: str = Query("", description="filter by pretext family"),
+    role: str = Query("", description="filter by target role"),
+    limit: int = Query(100, ge=1, le=500),
+    _auth: dict = Depends(require_auth),
+):
+    """Browse the phishing-technique library (used by Simulations to pick a lure)."""
+    from framework.phish_corpus import load_corpus
+    techniques = load_corpus().get("techniques", [])
+    if lure:
+        techniques = [t for t in techniques if t["lure"] == lure]
+    if role:
+        techniques = [t for t in techniques if t.get("target_role") == role]
+    techniques = sorted(techniques, key=lambda t: -t.get("severity", 0))[:limit]
+    return {
+        "count": len(techniques),
+        "lures": sorted({t["lure"] for t in load_corpus().get("techniques", [])}),
+        "techniques": techniques,
+    }
+
 # ------------------------------- Threat intelligence ----------------------------
 @router.get("/intel/indicators")
 def list_intel(limit: int = Query(200, ge=1, le=1000), _auth: dict = Depends(require_auth)):

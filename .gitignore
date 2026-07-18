@@ -20,3 +20,7 @@ uploads/
 # OS
 .DS_Store
 Thumbs.db
+
+# Model archives (multi-GB weight blobs; rebuild with scripts/build_phish_model.py)
+models/*.tar.gz
+data/attack.json
