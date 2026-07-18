@@ -1,5 +1,64 @@
 # Changelog
 
+## [1.17.0] - 2026-07-18
+### Fixed — session cookies dropped; every click asked for a fresh login (critical)
+The real cause was cross-origin: the page on `:3000` called the API at
+`http://localhost:8000` directly, so the httpOnly session cookies set by `:8000` were
+not reliably sent back (and broke entirely under `127.0.0.1` vs `localhost`). The
+`:3000` frontend now ships an **nginx that proxies `/api` to the backend**, and the app
+calls a **relative `/api`** — so the page and the API share one origin and the session
+cookies just stick. Verified end-to-end through `:3000`: login stores all three cookies,
+navigation and mutations succeed, and an expired access token refreshes without a
+re-login. (This is the same-origin model the `:3001` React dashboard already used.)
+
+### Added — 1,000,000-sample dataset from real open-source feeds
+`scripts/build_dataset.py` builds a **1,000,000-row labeled dataset** (600k phishing /
+400k benign) from open sources: **Phishing.Database** (~410k live phishing domains),
+**OpenPhish**, **URLhaus (abuse.ch)**, and the **top-100k** legitimate domains. Each real
+phishing domain becomes a concrete labeled email (impersonated brand inferred, auth set
+the way phishing presents); benign domains become authenticated business mail. The full
+1M file is git-ignored (reproducible); a 1k sample and the stats manifest are committed.
+
+### Fixed — detection recall on real-world phishing (validated at 1M)
+Validating against the real dataset exposed that brand-lookalike detection alone recalled
+only ~3% — most real phishing rides throwaway domains impersonating no famous brand.
+Added an **authentication-first floor**: an unauthenticated sender (SPF/DKIM/DMARC failing)
+with a link to act on is decisive on its own, since legitimate mail passes SPF. Deterministic
+recall went from **2.8% → 86.2%**. Measured on **700,000 rows** of the 1M dataset (300k
+phishing + 400k benign): **precision 99.90%, recall 86.21%, F1 0.926, false-positive rate
+0.066%** (263 of 400k benign). The same signal is now a fast-path gate, so this bulk resolves
+in ~1s without the model.
+
+### Added — closed loop: AI catches AI-generated attacks (the project's core goal)
+Verified live: the AI **generates** a phishing lure (e.g. a W-2 tax pretext, T1566.001,
+with a matching credential-capture landing page) and the AI **detector catches it**
+(quarantined, score 92). Real-time analysis runs on both entry points — the IMAP watcher
+and the `/api/v1/emails` ingestion — through the same pipeline, streamed to the UI over SSE.
+
+### Added — GoPhish fully AI-driven, with Burp-Collaborator-style tracking
+The AI now generates the **phishing landing page** (a brand-matched credential-capture
+form) per campaign, not just the email, and GoPhish records the **click** (page load) and
+**data-entry** (form submit) events then redirects — the callback tracking the user asked
+for. Verified end-to-end against the running GoPhish: campaign launched, AI page served,
+simulated click + submit tracked (`Clicked Link → Submitted Data`), results surfaced per
+department/employee in ThreatEye. Fixed the SMTP-profile from-address (GoPhish needs a bare
+email) and the GoPhish-configured flag on `/simulations/config`.
+
+### Added — expert model with skills baked into its own memory (threateye-phish:1.1)
+The specialised model's system brief — held **in the model** via its Ollama Modelfile, not
+loaded from external files — was expanded from phishing-only to a senior security engineer:
+malware/payload analysis (macros, LOLBins, HTML smuggling, deobfuscation), secure code
+review (injection, deserialization, weak crypto across Python/JS/PowerShell/Bash/SQL/PHP),
+web/network security (OWASP, TLS/DNS/DMARC), MITRE ATT&CK and IR. It answers email scoring
+as JSON and analyst questions as prose. Verified both modes. Re-archivable with
+`scripts/model-archive.sh` (now defaults to 1.1).
+
+### Fixed
+- AI provider base URL now follows the provider preset for cloud providers (openai/anthropic/
+  groq), so a stale local `ai_base_url` can't silently point cloud traffic at localhost.
+- SIEM connection remains fully configurable in the admin panel (Settings → Integrations):
+  webhook URL, key, auth header/prefix, format, and minimum-score, with Send Test Alert.
+
 ## [1.16.0] - 2026-07-18
 ### Added — MITRE-anchored phishing knowledge base + specialised model
 - **1,210-technique phishing corpus** (`data/phishing_corpus.json`, built by

@@ -1,0 +1,29 @@
+{
+ "total": 1000000,
+ "phishing": 600000,
+ "benign": 400000,
+ "brands_impersonated": 29,
+ "top_brands": {
+  "facebook": 5764,
+  "amazon": 5488,
+  "apple": 3548,
+  "whatsapp": 3355,
+  "usps": 2322,
+  "instagram": 2010,
+  "netflix": 1803,
+  "paypal": 1679,
+  "coinbase": 1628,
+  "microsoft": 1159,
+  "dhl": 750,
+  "icloud": 748,
+  "chase": 680,
+  "outlook": 679,
+  "ups": 675
+ },
+ "sources": [
+  "Phishing.Database ACTIVE",
+  "OpenPhish",
+  "top-100k domains"
+ ],
+ "phishing_domains_available": 412876
+}

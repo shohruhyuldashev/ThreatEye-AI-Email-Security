@@ -1,6 +1,7 @@
 FROM nginx:alpine
 
-# Copy static assets to nginx html directory
+# Same-origin API proxy (fixes cross-origin session cookies) + static assets.
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY . /usr/share/nginx/html
 
 EXPOSE 80

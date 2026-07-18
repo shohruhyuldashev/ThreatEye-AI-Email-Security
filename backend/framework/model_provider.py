@@ -46,7 +46,14 @@ def resolve_ai_config() -> dict:
     provider = (s.get("ai_provider") or os.getenv("AI_PROVIDER", "ollama")).lower()
     preset = PROVIDER_PRESETS.get(provider, PROVIDER_PRESETS["custom"])
 
-    base_url = s.get("ai_base_url") or preset["base_url"] or os.getenv("OPENAI_API_BASE", "http://ollama:11434/v1")
+    # Cloud providers have fixed API endpoints, so their preset wins — otherwise a
+    # stale `ai_base_url` left over from a previous Ollama/local setup would silently
+    # point OpenAI/Anthropic/Groq traffic at localhost. Only Ollama and "custom" honour
+    # a user-supplied base URL.
+    if provider in ("openai", "anthropic", "groq"):
+        base_url = preset["base_url"]
+    else:
+        base_url = s.get("ai_base_url") or preset["base_url"] or os.getenv("OPENAI_API_BASE", "http://ollama:11434/v1")
     api_key = s.get("ai_api_key") or os.getenv("OPENAI_API_KEY") or ""
     if not api_key:
         # The OpenAI SDK requires a non-empty key even for keyless local servers.
