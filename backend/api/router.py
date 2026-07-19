@@ -50,6 +50,26 @@ def _client_ip(request: Optional[Request]) -> str:
     return request.client.host if request.client else "unknown"
 
 
+INGEST_RATE_LIMIT = int(os.getenv("INGEST_RATE_LIMIT", "120"))            # requests per window, per tenant+key
+INGEST_RATE_WINDOW = int(os.getenv("INGEST_RATE_WINDOW_SECONDS", "60"))   # sliding window seconds
+
+
+def _check_ingest_rate_limit(org_id: int, key_id) -> None:
+    """Per-tenant, per-key fixed-window limit on the ingestion API so one customer (or a
+    runaway connector) can't exhaust the detection pipeline for everyone. Fails open if
+    Redis is unavailable, so availability never depends on the limiter."""
+    try:
+        from framework.cache import rate_limit_hit
+        count = rate_limit_hit(f"ingest:{org_id}:{key_id}", INGEST_RATE_WINDOW)
+    except Exception:
+        return
+    if count and count > INGEST_RATE_LIMIT:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Ingestion rate limit exceeded ({INGEST_RATE_LIMIT} per {INGEST_RATE_WINDOW}s). Retry shortly.",
+        )
+
+
 def _check_login_rate_limit(key: str) -> None:
     # Prefer the shared Redis counter (correct across replicas); fall back to
     # the in-process sliding window when Redis is not configured. The Redis path
@@ -1093,6 +1113,7 @@ def ingest_email(req: IngestEmailRequest, _key: dict = Depends(require_api_key))
     Programmatic email ingestion for gateways/connectors, authenticated by API key
     and scoped to the key's tenant. Runs the full hybrid detection pipeline.
     """
+    _check_ingest_rate_limit(_key["organization_id"], _key.get("id"))
     from services.ingest import persist_detection
 
     content = f"Subject: {req.subject}\nBody: {req.body}"

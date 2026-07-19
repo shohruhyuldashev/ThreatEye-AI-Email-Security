@@ -5,6 +5,8 @@ feature-complete, self-hosted lab/MVP) to something companies can deploy and tha
 sold globally as a product/SaaS. It is honest about what is missing and orders the work by
 what blocks real use first.
 
+> **Progress (2026-07-19):** ✅ tenant isolation complete (all reads org-scoped, cross-tenant tested) · ✅ settings secrets encrypted at rest (Fernet) · ✅ production hardening (no `--reload`, workers, startup secret guard) · ✅ per-tenant ingestion rate limits. Next: async task queue, signup/billing.
+>
 > **Current verdict.** ThreatEye works end-to-end and is a strong foundation, but it is
 > **not yet a production multi-tenant SaaS**. It is safe today only as an **internal tool or
 > a single-organization, authorized pilot** on an isolated network, after basic hardening.
@@ -93,23 +95,23 @@ what blocks real use first.
 ## 3. Phased roadmap
 
 ### Phase 0 — Production hardening (unlocks a single-org pilot) — ~2–4 weeks
-- [ ] Remove `--reload`; run Uvicorn/Gunicorn with multiple workers behind the Caddy/nginx TLS proxy.
-- [ ] Force non-default secrets on boot (`THREATEYE_AUTH_SECRET`, DB password); fail closed if defaults.
+- [x] Remove `--reload`; run Uvicorn/Gunicorn with multiple workers behind the Caddy/nginx TLS proxy.
+- [x] Force non-default secrets on boot (`THREATEYE_AUTH_SECRET`, DB password); fail closed if defaults.
 - [ ] Force an admin-password change on first login; drop `admin/admin`.
 - [ ] `COOKIE_SECURE=true` + TLS as the default deployment path; HSTS.
-- [ ] Encrypt settings secrets at rest (Fernet/KMS); key management documented.
+- [x] Encrypt settings secrets at rest (Fernet/KMS); key management documented.
 - [ ] Egress allow-list for `test-imap`/`test-siem`/URL-analyzer/WHOIS (kill the open SSRF).
 - [ ] Backups + restore runbook for Postgres; metrics alerting.
 
 ### Phase 1 — True multi-tenant SaaS (unlocks external customers) — ~1–3 months
-- [ ] **Complete tenant isolation**: every read/write scoped by `organization_id`, enforced at
+- [x] **Complete tenant isolation**: every read/write scoped by `organization_id`, enforced at
       a query layer (row-level security in Postgres, or a scoped repository), plus automated
       cross-tenant tests. Audit each endpoint (start with §2.1 list).
 - [ ] Self-serve **signup + tenant provisioning** (isolated schema/row-scoped data, seed defaults).
 - [ ] **Billing** (Stripe): plans, metering (emails scanned, seats, simulations), quotas,
       usage-based limits on `/v1/emails`.
 - [ ] **Operator console**: manage tenants, suspend/impersonate (audited), usage & health.
-- [ ] Per-tenant **rate limits & quotas**; abuse detection.
+- [x] Per-tenant **rate limits & quotas**; abuse detection.
 - [ ] Async **task queue** (Celery/RQ/Arq) for LLM/WHOIS/attachment; request returns fast,
       verdict streams in. Optional GPU inference workers or a hosted model API.
 
