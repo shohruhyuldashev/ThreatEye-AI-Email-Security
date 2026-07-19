@@ -286,3 +286,11 @@ A realistic, self-hosted email-security lab where AI-driven detection catches AI
 phishing — with the SOC workflow, phishing simulations, and SIEM integration a blue team
 actually needs. **Authorized use only:** it ships a live phishing framework and mail server;
 run it on an isolated network you control.
+
+## 🗺 Roadmap & production readiness
+
+ThreatEye today is a **feature-complete lab/MVP**, not yet a production multi-tenant SaaS.
+The honest gap list and the full team backlog to take it to enterprise/SaaS — tenant
+isolation, hardening, async scale, billing/onboarding, compliance, and the AI/ML plan — live
+in **[ROADMAP.md](ROADMAP.md)**. Security posture and known limitations are in
+**[SECURITY.md](SECURITY.md)**.
