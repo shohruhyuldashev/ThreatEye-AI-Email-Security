@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
-VERSION = "1.20.1"
+VERSION = "1.20.2"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
@@ -80,7 +80,6 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     return JSONResponse(status_code=403, content={"detail": "CSRF token missing or invalid"})
         return await call_next(request)
 
-@contextlib.asynccontextmanager
 def _check_production_secrets():
     """Fail closed on shipped-default secrets when running as production.
 
@@ -107,6 +106,7 @@ def _check_production_secrets():
     log.warning("%s — fine for a lab, but set real values before production (THREATEYE_ENV=production enforces this).", msg)
 
 
+@contextlib.asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: apply schema migrations + seed multi-tenant defaults first,
     # then the detection content and background tasks.
