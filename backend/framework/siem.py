@@ -47,7 +47,8 @@ def siem_config() -> dict[str, str]:
         c = conn.cursor()
         placeholders = ",".join(["?"] * len(_SIEM_KEYS))
         c.execute(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", _SIEM_KEYS)
-        settings = {row["key"]: row["value"] for row in c.fetchall()}
+        from framework.secretbox import decrypt_setting
+        settings = {row["key"]: decrypt_setting(row["key"], row["value"]) for row in c.fetchall()}
         conn.close()
     except Exception:
         pass

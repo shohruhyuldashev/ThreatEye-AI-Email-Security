@@ -81,9 +81,36 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 @contextlib.asynccontextmanager
+def _check_production_secrets():
+    """Fail closed on shipped-default secrets when running as production.
+
+    In a lab the defaults are fine, so we only *warn*; but if THREATEYE_ENV=production
+    (or PROD), refuse to boot with a default auth secret / DB password so a real
+    deployment can never accidentally run with credentials that are public in the repo.
+    """
+    import logging
+    log = logging.getLogger("threateye.startup")
+    is_prod = os.getenv("THREATEYE_ENV", "").lower() in ("production", "prod")
+    bad = []
+    if os.getenv("THREATEYE_AUTH_SECRET", "") in ("", "change-me-in-production"):
+        bad.append("THREATEYE_AUTH_SECRET")
+    if os.getenv("POSTGRES_PASSWORD", "") in ("", "threateye", "change-this-postgres-password"):
+        bad.append("POSTGRES_PASSWORD")
+    if os.getenv("COOKIE_SECURE", "false").lower() != "true" and is_prod:
+        bad.append("COOKIE_SECURE (must be true behind TLS)")
+    if not bad:
+        return
+    msg = "Insecure defaults in use: " + ", ".join(bad)
+    if is_prod:
+        raise RuntimeError(
+            f"Refusing to start in production with {msg}. Set strong secrets in .env.")
+    log.warning("%s — fine for a lab, but set real values before production (THREATEYE_ENV=production enforces this).", msg)
+
+
 async def lifespan(app: FastAPI):
     # Startup: apply schema migrations + seed multi-tenant defaults first,
     # then the detection content and background tasks.
+    _check_production_secrets()
     run_migrations()
     seed_saas_defaults()
     seed_default_policies()

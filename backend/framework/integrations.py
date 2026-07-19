@@ -34,7 +34,8 @@ def _load_config() -> dict[str, str]:
     c = conn.cursor()
     placeholders = ",".join(["?"] * len(CONFIG_KEYS))
     c.execute(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", CONFIG_KEYS)
-    cfg = {row["key"]: row["value"] for row in c.fetchall()}
+    from framework.secretbox import decrypt_setting
+    cfg = {row["key"]: decrypt_setting(row["key"], row["value"]) for row in c.fetchall()}
     conn.close()
     return cfg
 

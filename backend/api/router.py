@@ -1153,11 +1153,12 @@ def update_settings(settings: dict, _auth: dict = Depends(require_role("admin"))
             continue
         if _is_sensitive_key(key) and str(value) == MASKED_SECRET:
             continue
+        from framework.secretbox import encrypt_setting
         c.execute('''
-            INSERT INTO settings (key, value) 
-            VALUES (?, ?) 
+            INSERT INTO settings (key, value)
+            VALUES (?, ?)
             ON CONFLICT(key) DO UPDATE SET value=excluded.value
-        ''', (key, str(value)))
+        ''', (key, encrypt_setting(key, str(value))))
 
     c.execute('''
         INSERT INTO audit_log (actor, action, target_type, target_id, details)
@@ -1631,7 +1632,8 @@ def _saved_settings(keys: tuple) -> dict:
     c = conn.cursor()
     placeholders = ",".join(["?"] * len(keys))
     c.execute(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", keys)
-    rows = {row["key"]: row["value"] for row in c.fetchall()}
+    from framework.secretbox import decrypt_setting
+    rows = {row["key"]: decrypt_setting(row["key"], row["value"]) for row in c.fetchall()}
     conn.close()
     return rows
 

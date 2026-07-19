@@ -46,7 +46,8 @@ def _sim_config() -> dict:
     keys = ("sim_smtp_host", "sim_smtp_from", "sim_phish_url", "sim_landing_html", "sim_redirect_url")
     placeholders = ",".join(["?"] * len(keys))
     c.execute(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", keys)
-    s = {row["key"]: row["value"] for row in c.fetchall()}
+    from framework.secretbox import decrypt_setting
+    s = {row["key"]: decrypt_setting(row["key"], row["value"]) for row in c.fetchall()}
     conn.close()
     return {
         "smtp_host": s.get("sim_smtp_host") or os.getenv("SIM_SMTP_HOST", "mail_server:25"),
@@ -62,7 +63,8 @@ def get_api():
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT key, value FROM settings WHERE key IN ('sim_gophish_url', 'sim_gophish_api_key', 'gophish_url', 'gophish_key')")
-    settings = {row["key"]: row["value"] for row in c.fetchall()}
+    from framework.secretbox import decrypt_setting
+    settings = {row["key"]: decrypt_setting(row["key"], row["value"]) for row in c.fetchall()}
     conn.close()
 
     gophish_url = settings.get("sim_gophish_url") or settings.get("gophish_url") or os.getenv("GOPHISH_URL", "http://gophish:3333")

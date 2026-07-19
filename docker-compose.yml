@@ -116,6 +116,7 @@ services:
       - CLAMAV_TCP=${CLAMAV_TCP:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LLM_TIMEOUT=${LLM_TIMEOUT:-90}
+      - UVICORN_RELOAD=${UVICORN_RELOAD:-1}
     depends_on:
       gophish:
         condition: service_started

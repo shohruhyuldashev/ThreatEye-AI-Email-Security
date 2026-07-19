@@ -33,7 +33,8 @@ def _settings(keys: list[str]) -> dict:
         c = conn.cursor()
         placeholders = ",".join(["?"] * len(keys))
         c.execute(f"SELECT key, value FROM settings WHERE key IN ({placeholders})", tuple(keys))
-        rows = {r["key"]: r["value"] for r in c.fetchall()}
+        from framework.secretbox import decrypt_setting
+        rows = {r["key"]: decrypt_setting(r["key"], r["value"]) for r in c.fetchall()}
         conn.close()
         return rows
     except Exception:

@@ -73,7 +73,8 @@ def start_email_watcher():
             
             # Load dynamic settings instead of ENV
             c.execute("SELECT key, value FROM settings WHERE key IN ('imap_server', 'imap_user', 'imap_pass')")
-            settings = {row['key']: row['value'] for row in c.fetchall()}
+            from framework.secretbox import decrypt_setting
+            settings = {row['key']: decrypt_setting(row['key'], row['value']) for row in c.fetchall()}
             conn.close()
             
             IMAP_SERVER = settings.get("imap_server", "")
