@@ -1,31 +1,55 @@
-# threateye-phish:1.3 (3b model) — split archive
+# ThreatEye model — `threateye-phish:1.3` (3b)
 
-The full model archive (`threateye-phish-1.3-*.tar.gz`, ~1.8 GB) is split into ~500 MB
-parts so each uploads reliably over a slow/unstable connection — a single 1.8 GB upload
-was failing mid-transfer with GitHub's "can't process that file".
+The specialised 3b phishing-analyst model (base `qwen2.5:3b`), split into ~500 MB parts so
+each uploads reliably over a slow link. The model version is `1.3` regardless of which
+release tag these assets are attached to.
 
-## Parts
+## Assets
 
-- `threateye-phish-1.3.part-00.bin`
-- `threateye-phish-1.3.part-01.bin`
-- `threateye-phish-1.3.part-02.bin`
-- `threateye-phish-1.3.part-03.bin`
-- `SHA256-full.txt` — sha256 of the reassembled `.tar.gz`
+| File | What |
+|------|------|
+| `threateye-phish-1.3.part-00.bin` … `part-03.bin` | the archive, split into 4 parts (~1.8 GB total) |
+| `SHA256-full.txt` | sha256 of the reassembled `.tar.gz` (for integrity) |
 
-Attach all of these to a GitHub Release (Releases → Draft new release → attach files).
-
-## Restore (download all parts, then)
+## Restore & use
 
 ```bash
-# 1. reassemble (parts concatenate in order)
+# 1. Download all four .bin parts + SHA256-full.txt into one folder, then reassemble
+#    (the parts concatenate in filename order):
 cat threateye-phish-1.3.part-*.bin > threateye-phish-1.3.tar.gz
 
-# 2. verify integrity
-sha256sum -c <<< "$(cat SHA256-full.txt)  threateye-phish-1.3.tar.gz"
+# 2. Verify integrity (must match SHA256-full.txt):
+echo "$(cat SHA256-full.txt)  threateye-phish-1.3.tar.gz" | sha256sum -c
+#    -> threateye-phish-1.3.tar.gz: OK
 
-# 3. import into Ollama (offline-safe)
+# 3. Import into Ollama. From the ThreatEye repo:
 ./scripts/model-archive.sh import threateye-phish-1.3.tar.gz
-docker exec ollama ollama list      # should show threateye-phish:1.3
+
+#    …or without the repo, straight into the ollama volume:
+#    docker run --rm -v <ollama_data_volume>:/to -v "$PWD":/from alpine \
+#      sh -c "tar xzf /from/threateye-phish-1.3.tar.gz -C /to"
+#    docker restart ollama
+
+# 4. Confirm it loaded:
+docker exec ollama ollama list        # should list threateye-phish:1.3
 ```
 
-The archive holds `threateye-phish:1.3` + its `qwen2.5:3b` base (no private key).
+## Run it
+
+```bash
+# Chat with it directly (email scoring as JSON, or ask security questions in prose):
+docker exec -it ollama ollama run threateye-phish:1.3
+```
+
+In the app: **Settings → AI Engine → Model** = `threateye-phish:1.3`.
+
+## Rebuild instead of download
+
+The archive holds `threateye-phish:1.3` + its `qwen2.5:3b` base (no private key). If you
+have the repo and `qwen2.5:3b` in Ollama, you can skip the download and rebuild the exact
+model:
+
+```bash
+python3 scripts/build_phishing_corpus.py
+python3 scripts/build_phish_model.py         # -> threateye-phish:1.3
+```
