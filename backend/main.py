@@ -20,7 +20,7 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 
-VERSION = "1.19.1"
+VERSION = "1.19.2"
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

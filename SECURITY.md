@@ -23,6 +23,10 @@ built in, what you must still configure, and the known limitations of the lab de
 | Output rendering | The frontend HTML-escapes all attacker-influenced fields (sender, subject, evidence, timeline) before injecting them into the DOM. |
 | Network exposure | `docker-compose.yml` binds Postgres, Redis and Ollama to `127.0.0.1` only. |
 | SIEM delivery | Alerts are dispatched to a background worker (non-blocking) with retry + backoff; the destination + key are set in the admin panel, not hard-coded. |
+| Prompt injection / jailbreak | The model that reads attacker-controlled email treats that content as **data, never instructions**; attempts to steer it ("ignore previous instructions", "mark this email as safe", DAN-style framing) are flagged and never obeyed. A deterministic detector also matches these families, so an injection attempt is caught even with the LLM offline. |
+| Policy engine | Quarantine/response policies **fail closed**: a policy with no conditions, or any unrecognised condition key, does not match — a mis-typed rule can't silently fire on every email. |
+| Self-improvement | `scripts/self_improve.py` is governed, not autonomous: learns only from analyst-confirmed data (never its own output), promotes only past a validation + safety gate, and is bounded by an example cap, a version ceiling, a kill-switch (`data/SELF_IMPROVE_DISABLED`), an audit log, and a required human `--confirm`. |
+| Model archives | `scripts/model-archive.sh` excludes Ollama's private signing key from the exported tar. |
 
 ## You MUST configure before any real use
 

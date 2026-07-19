@@ -7,11 +7,14 @@ simulations against your own staff — all self-hosted, offline-capable, and SOC
 
 Core pieces:
 
-- **Specialised detection model** (`threateye-phish:1.1`) — a local Ollama model derived
-  from qwen2.5:3b, its expertise baked into the model (phishing, malware, code review,
-  ATT&CK, IR). Any OpenAI-compatible provider also works.
-- **MITRE-anchored phishing corpus** (1,210 techniques) + a **1,000,000-row labeled
-  dataset** built from real open feeds, used to validate the detector at scale.
+- **Specialised detection model** (`threateye-phish:1.3`, default) — a local Ollama model
+  derived from qwen2.5:3b, its expertise baked in (phishing, malware, code review, ATT&CK,
+  IR) with **semantic-intent reasoning**, **prompt-injection/jailbreak defence**, and two
+  output modes (prose for chat, JSON for scoring). A **multilingual 7b variant** (`2.0`,
+  English/Russian/Uzbek) is reproducible on demand. Any OpenAI-compatible provider also works.
+- **MITRE-anchored phishing corpus** (1,210 techniques) — the model's knowledge — plus a
+  **1,000,000-row labeled dataset** built from real open feeds, used to **validate**
+  (benchmark) the detector at scale, not to fine-tune it.
 - **Deterministic detection stack** — heuristics, SPF/DKIM/DMARC authentication, domain
   intel/typosquat, BEC signals, prompt-injection guard, and a corpus matcher — so
   detection holds when the LLM is slow or offline.
@@ -79,23 +82,37 @@ Detection is grounded in an open-source-derived knowledge base, not guesswork.
   benign) drawn from **Phishing.Database**, **OpenPhish**, **URLhaus** and the top-100k
   legitimate domains. The big file is reproducible and git-ignored; a sample + stats are
   committed.
-- **Specialised model** (`scripts/build_phish_model.py`) — builds `threateye-phish:1.1`
+- **Specialised model** (`scripts/build_phish_model.py`) — builds `threateye-phish:1.3`
   in Ollama: an expert system brief distilled from the corpus, classifier-tuned decoding,
-  and worked examples, **baked into the model** (Ollama Modelfile) rather than loaded from
-  files. It answers email scoring as JSON and analyst questions as prose.
-- **Validated at scale** — on 700k rows of the 1M dataset the deterministic layer reaches
-  **precision 99.90%, recall 86.21%** (false-positive rate 0.066%). Clear cases resolve in
-  ~1s via a fast path; only genuinely ambiguous mail invokes the LLM.
-- **Model persistence** — `scripts/model-archive.sh export|import` archives the trained
-  model as a tar (the Ollama volume) so it survives `down -v` / a host rebuild / an offline
-  move.
+  and worked examples, **baked into the model** (Ollama Modelfile) — prompt/parameter
+  specialisation, **not gradient fine-tuning**. It scores emails as JSON and answers analyst
+  questions as prose. A 7b multilingual variant (`--base qwen2.5:7b --name threateye-phish:2.0`)
+  adds English/Russian/Uzbek chat when you want it.
+- **Validated at scale** — across the 1M dataset the deterministic layer alone reaches
+  **precision 99.9%, recall 86%** (false-positive rate ~0.07%). By default the LLM runs on
+  every email (`DETECTOR_FAST_PATH=0`) and the deterministic checks are a safety net that can
+  only raise the score; set `DETECTOR_FAST_PATH=1` to let clearly-decisive cases skip the LLM
+  for speed on CPU.
+- **Model persistence** — `scripts/model-archive.sh export|import` (and `MODEL.md`) archive
+  the trained model as a tar (the Ollama volume, private key excluded) so it survives
+  `down -v` / a host rebuild / an offline move. Large archives can be `split` for upload.
+- **Governed self-improvement** (`scripts/self_improve.py`) — learns only from
+  analyst-confirmed verdicts, promotes a candidate only past a validation + safety gate, and
+  is bounded by an example cap, a version ceiling, a kill-switch and an audit log (human
+  `--confirm` required). Never autonomous.
 
 **Closed loop (the project's goal):** the AI generates a phishing lure + landing page, and
 the AI detector catches it — verified live (generated W-2 lure, T1566.001 → quarantined).
 
 Configure the provider from **Settings → AI Engine** (OpenAI / Anthropic / Groq /
 Ollama-local / Custom, model, API key, base URL); **Test AI Connection** runs a real
-completion.
+completion. Talk to the model directly:
+
+```bash
+docker exec -it ollama ollama run threateye-phish:1.3
+```
+
+See [MODEL.md](MODEL.md) for where the model runs, how to rebuild, archive, and self-improve it.
 
 ---
 
@@ -249,7 +266,7 @@ repo but **not run** — the shipping dashboard is `frontend/` on `:3000`.
 | `THREATEYE_AUTH_SECRET` | JWT signing key (auto-generated + persisted if unset) |
 | `COOKIE_SECURE` / `COOKIE_SAMESITE` | Session-cookie flags (set `COOKIE_SECURE=true` behind TLS) |
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Database credentials |
-| `AI_MODEL` / `OPENAI_API_BASE` / `OPENAI_API_KEY` | LLM provider (default `threateye-phish:1.1` on Ollama) |
+| `AI_MODEL` / `OPENAI_API_BASE` / `OPENAI_API_KEY` | LLM provider (default `threateye-phish:1.3` on Ollama) |
 | `GOPHISH_API_KEY` / `GOPHISH_URL` / `GOPHISH_VERIFY_TLS` | GoPhish integration |
 | `SIEM_WEBHOOK_URL` / `SIEM_FORMAT` | SIEM export (also settable in Settings) |
 | `REDIS_URL` / `CLAMAV_TCP` | Shared rate-limit state / optional attachment AV |
@@ -258,7 +275,7 @@ repo but **not run** — the shipping dashboard is `frontend/` on `:3000`.
 
 ## 🧱 Tech stack
 
-FastAPI · PostgreSQL · Redis · Ollama (`threateye-phish:1.1`, base qwen2.5:3b) ·
+FastAPI · PostgreSQL · Redis · Ollama (`threateye-phish:1.3`, base qwen2.5:3b) ·
 docker-mailserver (Postfix/Dovecot) · GoPhish · Elasticsearch + Kibana · nginx · Caddy.
 
 ---

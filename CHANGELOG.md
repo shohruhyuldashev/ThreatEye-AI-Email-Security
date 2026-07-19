@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.19.2] - 2026-07-19
+### Docs — README and SECURITY brought up to the current state
+- README: default model is `threateye-phish:1.3` (3b) with semantic-intent + injection
+  defence and two output modes; the 7b multilingual `2.0` is reproducible on demand; the
+  1M dataset is described as a **validation/benchmark** set (not fine-tuning); documents the
+  full-AI default (`DETECTOR_FAST_PATH`), model archive/split, governed self-improvement,
+  and direct shell chat.
+- SECURITY: added the prompt-injection/jailbreak defence, fail-closed policy engine, governed
+  self-improvement guardrails, and private-key-excluded model archives to the hardening table.
+
+## [1.19.1] - 2026-07-19
+### Changed — kept the fast 3b as the default; removed the 7b from the instance
+On CPU the 7b `threateye-phish:2.0` scored ~3 min/email, which is too slow for the live
+monitor, so the default returns to the fast 3b **`threateye-phish:1.3`** (~1 min/email) and
+the 7b (plus its `qwen2.5:7b` base) is removed to free memory and disk (`ollama` mem_limit
+back to 6g). The 7b stays fully reproducible from the committed Modelfile:
+`python3 scripts/build_phish_model.py --base qwen2.5:7b --name threateye-phish:2.0`.
+
 ## [1.19.0] - 2026-07-19
 ### Added — bigger multilingual model `threateye-phish:2.0` (qwen2.5:7b base)
 Trained the same pipeline onto a **qwen2.5:7b** base (up from 3b) and made it multilingual:
