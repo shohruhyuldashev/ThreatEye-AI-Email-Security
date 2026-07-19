@@ -90,7 +90,10 @@ python3 scripts/self_improve.py --confirm      # full cycle; promote only if it 
 - `1.2` — + semantic-intent reasoning, prompt-injection & jailbreak defence, real-template grounding.
 - `1.3` — + **two output modes**: natural prose for a greeting/question/chat, and the scoring
   JSON only for an actual email. (3b base, fast — ~1 min/email on CPU.)
-- `2.0` — **qwen2.5:7b base** + multilingual (English / Russian / Uzbek) + everything above.
-  Fluent Russian & Uzbek chat; English/Russian technical answers are strong, Uzbek technical
-  depth is limited by the base model. Scoring is ~3 min/email on CPU. **Current default.**
-  Switch back to `threateye-phish:1.3` in Settings → AI Engine for speed.
+- `2.0` — **qwen2.5:7b base** + multilingual (English / Russian / Uzbek). Fluent Russian &
+  Uzbek chat; Uzbek technical depth limited by the base model; ~3 min/email on CPU. NOT kept
+  installed by default (too slow/heavy for CPU) — rebuild it when wanted:
+  `python3 scripts/build_phish_model.py --base qwen2.5:7b --name threateye-phish:2.0`
+  (needs `ollama pull qwen2.5:7b` first).
+
+**Active default: `threateye-phish:1.3` (3b, fast).**
