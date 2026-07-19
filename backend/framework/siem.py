@@ -123,10 +123,11 @@ def _deliver_with_retry(event_type: str, payload: dict[str, Any]) -> None:
         conn = get_db_connection()
         c = conn.cursor()
         c.execute('''
-            INSERT INTO siem_events (event_type, payload_json, destination, status, response_code, error)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO siem_events (event_type, payload_json, destination, status, response_code, error, organization_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ''', (event_type, json.dumps(payload), result.get("destination", "not_configured"),
-              result["status"], result.get("response_code"), result.get("error", "")))
+              result["status"], result.get("response_code"), result.get("error", ""),
+              int(payload.get("organization_id", 1) or 1)))
         conn.commit()
         conn.close()
     except Exception as e:

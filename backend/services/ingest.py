@@ -242,7 +242,7 @@ def persist_detection(
                 "INSERT INTO email_timeline (email_id, event_type, details) VALUES (?, 'case_created', ?)",
                 (email_id, f"Case #{case_id} created"),
             )
-        audit_log("email_quarantined", source, "email", email_id, ai_reason)
+        audit_log("email_quarantined", source, "email", email_id, ai_reason, organization_id=organization_id)
         export_siem_event("threateye.email_alert", siem_payload)
         execute_playbooks(policy_result["policy_action"], email_id, case_id, siem_payload, cursor)
     elif phishing_score >= siem_min_score():

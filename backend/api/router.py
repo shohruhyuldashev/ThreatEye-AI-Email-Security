@@ -697,7 +697,7 @@ def upload_targets(file: UploadFile = File(...), _auth: dict = Depends(require_r
         raise HTTPException(status_code=400, detail="No valid email addresses found in the file.")
     org = _org_id(_auth)
     stored = store_targets(org, targets)
-    audit_log("roster_uploaded", _auth.get("sub", "analyst"), "sim_targets", str(org), f"{stored} targets")
+    audit_log("roster_uploaded", _auth.get("sub", "analyst"), "sim_targets", str(org), f"{stored} targets", organization_id=_org_id(_auth))
     return {
         "status": "success",
         "imported": stored,
@@ -799,7 +799,7 @@ def trigger_simulation(
     )
     conn.commit()
     conn.close()
-    audit_log("simulation_launched", _auth.get("sub", "analyst"), "sim_campaign", str(result.get("campaign_id")), f"{mode}, {result.get('targets', len(targets))} targets")
+    audit_log("simulation_launched", _auth.get("sub", "analyst"), "sim_campaign", str(result.get("campaign_id")), f"{mode}, {result.get('targets', len(targets))} targets", organization_id=_org_id(_auth))
 
     return {
         "status": "success",
@@ -1225,8 +1225,9 @@ def list_cases(_auth: dict = Depends(require_auth)):
         SELECT c.*, e.sender, e.subject, e.risk_score
         FROM cases c
         LEFT JOIN emails e ON c.email_id = e.id
+        WHERE c.organization_id = ?
         ORDER BY c.created_at DESC
-    ''')
+    ''', (_org_id(_auth),))
     cases = [dict(row) for row in c.fetchall()]
     conn.close()
     return cases
@@ -1267,7 +1268,7 @@ def update_case(case_id: int, req: CaseUpdateRequest, _auth: dict = Depends(requ
 def get_audit_log(limit: int = Query(100, ge=1, le=500), _auth: dict = Depends(require_auth)):
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT ?", (limit,))
+    c.execute("SELECT * FROM audit_log WHERE organization_id = ? ORDER BY created_at DESC LIMIT ?", (_org_id(_auth), limit))
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
@@ -1280,9 +1281,10 @@ def list_iocs(limit: int = Query(200, ge=1, le=1000), _auth: dict = Depends(requ
         SELECT i.*, e.subject, e.sender
         FROM iocs i
         JOIN emails e ON i.email_id = e.id
+        WHERE e.organization_id = ?
         ORDER BY i.created_at DESC
         LIMIT ?
-    ''', (limit,))
+    ''', (_org_id(_auth), limit))
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
@@ -1295,9 +1297,10 @@ def list_mitre_mappings(limit: int = Query(200, ge=1, le=1000), _auth: dict = De
         SELECT m.*, e.subject, e.sender, e.risk_score
         FROM mitre_mappings m
         JOIN emails e ON m.email_id = e.id
+        WHERE e.organization_id = ?
         ORDER BY m.created_at DESC
         LIMIT ?
-    ''', (limit,))
+    ''', (_org_id(_auth), limit))
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
@@ -1306,7 +1309,7 @@ def list_mitre_mappings(limit: int = Query(200, ge=1, le=1000), _auth: dict = De
 def list_siem_events(limit: int = Query(100, ge=1, le=500), _auth: dict = Depends(require_auth)):
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT * FROM siem_events ORDER BY created_at DESC LIMIT ?", (limit,))
+    c.execute("SELECT * FROM siem_events WHERE organization_id = ? ORDER BY created_at DESC LIMIT ?", (_org_id(_auth), limit))
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
@@ -1418,7 +1421,7 @@ def add_intel(req: IntelIndicatorRequest, _auth: dict = Depends(require_role("an
         "source": req.source or "manual", "description": req.description,
         "confidence": req.confidence, "created_by": _auth.get("sub", "analyst"),
     })
-    audit_log("intel_added", _auth.get("sub", "analyst"), "intel", str(new_id), f"{req.verdict}:{req.value}")
+    audit_log("intel_added", _auth.get("sub", "analyst"), "intel", str(new_id), f"{req.verdict}:{req.value}", organization_id=_org_id(_auth))
     return {"status": "success", "id": new_id}
 
 @router.delete("/intel/indicators/{indicator_id}")
@@ -1454,7 +1457,7 @@ def remediate_email(email_id: int, req: RemediateRequest, _auth: dict = Depends(
         "threat_type": row["threat_type"], "recommended_action": row["recommended_action"],
     }
     results = run_remediation(org, email_id, actions, context, created_by=_auth.get("sub", "analyst"))
-    audit_log("email_remediated", _auth.get("sub", "analyst"), "email", str(email_id), ",".join(actions))
+    audit_log("email_remediated", _auth.get("sub", "analyst"), "email", str(email_id), ",".join(actions), organization_id=_org_id(_auth))
     return {"status": "success", "results": results}
 
 @router.get("/remediation")
@@ -1575,7 +1578,7 @@ def sync_sim_behavior_endpoint(_auth: dict = Depends(require_role("analyst"))):
     """Fold GoPhish click/submit outcomes into employee behavioural risk (raises future scrutiny)."""
     from framework.learning import sync_sim_behavior
     result = sync_sim_behavior(_org_id(_auth))
-    audit_log("sim_behavior_synced", _auth.get("sub", "analyst"), "user_profiles", str(_org_id(_auth)), str(result))
+    audit_log("sim_behavior_synced", _auth.get("sub", "analyst"), "user_profiles", str(_org_id(_auth)), str(result), organization_id=_org_id(_auth))
     return result
 
 # ------------------------------- Plugins (.tap) ---------------------------------
