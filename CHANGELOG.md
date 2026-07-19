@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.19.0] - 2026-07-19
+### Added — bigger multilingual model `threateye-phish:2.0` (qwen2.5:7b base)
+Trained the same pipeline onto a **qwen2.5:7b** base (up from 3b) and made it multilingual:
+- **English / Russian / Uzbek.** The model now understands and replies in the user's
+  language. Uzbek and Russian greetings/introductions are fluent (the 3b model used to
+  answer a Uzbek greeting with "looks like a typo, please rephrase"). English and Russian
+  technical answers are strong; **Uzbek technical depth is limited by the base model** and
+  can be uneven — a fundamental low-resource-language constraint, not something prompt
+  specialisation fully fixes.
+- **Varied prose replies.** Multiple, distinct few-shot examples (in three languages) stop
+  the model collapsing to one canned greeting for every conversational input.
+- Same specialisation as 1.3: MITRE corpus grounding, semantic-intent reasoning,
+  prompt-injection/jailbreak defence, and two output modes (prose chat vs JSON scoring).
+- Verified: Uzbek/Russian intros fluent, email scoring returns clean JSON (score 92 in
+  shell; app `/v1/emails` quarantines a lookalike at 100).
+
+**Tradeoff:** on CPU, 7b scoring is ~3 min/email (vs ~1 min for the 3b `1.3`). `2.0` is the
+new default; switch to `threateye-phish:1.3` in Settings → AI Engine for speed. To run 7b
+the compose `ollama` memory limit was raised 6g→8g; Elasticsearch/Kibana can be stopped to
+free RAM (`docker compose stop elasticsearch kibana`).
+
+The 7b weights are ~4.7 GB (too big for a single GitHub Release asset); the model is
+**reproducible** from the committed Modelfile: `python3 scripts/build_phish_model.py
+--base qwen2.5:7b --name threateye-phish:2.0`.
+
 ## [1.18.1] - 2026-07-19
 ### Fixed — the model replied with a scoring verdict even to "hello"
 Chatting with the model directly (`ollama run threateye-phish`) returned an email-scoring

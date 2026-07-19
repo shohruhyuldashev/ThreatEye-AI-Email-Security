@@ -89,4 +89,8 @@ python3 scripts/self_improve.py --confirm      # full cycle; promote only if it 
 - `1.1` — + malware / code-review / web-network / ATT&CK / IR expertise.
 - `1.2` — + semantic-intent reasoning, prompt-injection & jailbreak defence, real-template grounding.
 - `1.3` — + **two output modes**: natural prose for a greeting/question/chat, and the scoring
-  JSON only for an actual email. (1.2 replied with a scoring verdict even to "hello".) **Current default.**
+  JSON only for an actual email. (3b base, fast — ~1 min/email on CPU.)
+- `2.0` — **qwen2.5:7b base** + multilingual (English / Russian / Uzbek) + everything above.
+  Fluent Russian & Uzbek chat; English/Russian technical answers are strong, Uzbek technical
+  depth is limited by the base model. Scoring is ~3 min/email on CPU. **Current default.**
+  Switch back to `threateye-phish:1.3` in Settings → AI Engine for speed.

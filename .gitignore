@@ -31,3 +31,6 @@ data/phish_dataset.jsonl
 # self-improvement runtime state
 data/self_improve_audit.jsonl
 data/SELF_IMPROVE_DISABLED
+
+# split model-archive parts (upload to a Release, not git)
+models/**/*.bin
