@@ -22,13 +22,13 @@ docker exec ollama ollama list    # all installed models
 ## Talk to it directly (shell)
 
 ```bash
-docker exec -it ollama ollama run threateye-phish:1.2
+docker exec -it ollama ollama run threateye-phish:1.3
 ```
 
 Then chat — ask it to score an email, explain a technique, review a snippet, etc. One-shot:
 
 ```bash
-docker exec ollama ollama run threateye-phish:1.2 "What is a homoglyph domain attack and how do you detect it?"
+docker exec ollama ollama run threateye-phish:1.3 "What is a homoglyph domain attack and how do you detect it?"
 ```
 
 ## Rebuild it from source (the reproducible "package")
@@ -38,7 +38,7 @@ git-friendly way to ship it:
 
 ```bash
 python3 scripts/build_phishing_corpus.py     # MITRE-anchored technique corpus
-python3 scripts/build_phish_model.py         # -> threateye-phish:1.2 in Ollama
+python3 scripts/build_phish_model.py         # -> threateye-phish:1.3 in Ollama
 ```
 
 `data/Modelfile.threateye-phish` is the produced Modelfile (the baked-in brief). Rebuilding
@@ -54,8 +54,8 @@ The weights are in the `ollama_data` Docker volume, not the image. Archive/resto
 docker exec ollama ollama list
 ```
 
-A **lean archive** (`models/threateye-phish-1.2-*.tar.gz`, ~1.8 GB) contains only
-`threateye-phish:1.2` + its `qwen2.5:3b` base — small enough for a GitHub Release asset
+A **lean archive** (`models/threateye-phish-1.3-*.tar.gz`, ~1.8 GB) contains only
+`threateye-phish:1.3` + its `qwen2.5:3b` base — small enough for a GitHub Release asset
 (2 GB limit). The private signing key is excluded. Restore with the same `import` command.
 
 > Uploading the weights: they are too large for plain `git` (100 MB limit). Attach the
@@ -87,5 +87,6 @@ python3 scripts/self_improve.py --confirm      # full cycle; promote only if it 
 
 - `1.0` — phishing-specialised (MITRE corpus).
 - `1.1` — + malware / code-review / web-network / ATT&CK / IR expertise.
-- `1.2` — + semantic-intent reasoning, prompt-injection & jailbreak defence, real-template
-  grounding. **Current default.**
+- `1.2` — + semantic-intent reasoning, prompt-injection & jailbreak defence, real-template grounding.
+- `1.3` — + **two output modes**: natural prose for a greeting/question/chat, and the scoring
+  JSON only for an actual email. (1.2 replied with a scoring verdict even to "hello".) **Current default.**

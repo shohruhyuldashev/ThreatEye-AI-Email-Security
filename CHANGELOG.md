@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.18.1] - 2026-07-19
+### Fixed — the model replied with a scoring verdict even to "hello"
+Chatting with the model directly (`ollama run threateye-phish`) returned an email-scoring
+JSON verdict for a plain greeting, because every few-shot example taught "input → JSON
+verdict" and the low temperature locked that in. `threateye-phish:1.3` now has **two output
+modes**: it replies in natural prose to a greeting, question, or chat, and emits the scoring
+JSON **only** when the input is actually an email to analyse (sender/subject/body, an
+explicit request to score, or the JSON schema). Verified: "Hello Bro" → a normal prose
+reply; a real phishing email → JSON verdict (and app scoring via `/v1/emails` is unchanged,
+still quarantines at 100). New default model `threateye-phish:1.3`.
+
 ## [1.18.0] - 2026-07-19
 ### Changed — the AI now runs on every email (full-AI by default)
 Detection was quietly short-circuiting the model: a fast path let the deterministic layer
