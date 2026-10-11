@@ -124,6 +124,99 @@
     "Notifications":        { uz: "Bildirishnomalar",     ru: "Уведомления" }
   };
 
+  // Extended coverage — quarantine / threat detail / SOC / settings / simulations.
+  Object.assign(DICT, {
+    "Real-Time Monitor":    { uz: "Jonli monitor",          ru: "Монитор в реальном времени" },
+    "AI Engine: Active":    { uz: "AI dvigatel: Faol",      ru: "AI-движок: Активен" },
+    "Simulations: Running": { uz: "Simulyatsiyalar: Ishlamoqda", ru: "Симуляции: Выполняются" },
+    "Recent Alerts":        { uz: "So'nggi ogohlantirishlar", ru: "Последние оповещения" },
+    "No new alerts":        { uz: "Yangi ogohlantirish yo'q", ru: "Нет новых оповещений" },
+    "Authenticate Process": { uz: "Tizimga kirish",         ru: "Войти в систему" },
+    "Invalid credentials detected.": { uz: "Noto'g'ri ma'lumotlar.", ru: "Неверные данные." },
+    "Last updated: Just now": { uz: "Yangilandi: hozirgina", ru: "Обновлено: только что" },
+    "Owner":                { uz: "Egasi",                  ru: "Владелец" },
+    // Quarantine
+    "Quarantine Manager":   { uz: "Karantin boshqaruvi",    ru: "Управление карантином" },
+    "Review and manage isolated threats to protect the network.":
+      { uz: "Tarmoqni himoya qilish uchun ajratilgan tahdidlarni ko'rib chiqing va boshqaring.",
+        ru: "Просматривайте и управляйте изолированными угрозами для защиты сети." },
+    "Isolated Items":       { uz: "Ajratilgan elementlar",  ru: "Изолированные элементы" },
+    "Recipient":            { uz: "Qabul qiluvchi",         ru: "Получатель" },
+    "AI Reason":            { uz: "AI sababi",              ru: "Причина AI" },
+    "No threats currently isolated.": { uz: "Hozircha ajratilgan tahdid yo'q.", ru: "Сейчас нет изолированных угроз." },
+    "All Risk Levels":      { uz: "Barcha xavf darajalari", ru: "Все уровни риска" },
+    // Threat detail
+    "AI Analysis Log":      { uz: "AI tahlil jurnali",      ru: "Журнал анализа AI" },
+    "Evidence-Based Verdict": { uz: "Dalilga asoslangan hukm", ru: "Вердикт на основе доказательств" },
+    "AI Mode 2.0 Agents":   { uz: "AI Rejim 2.0 agentlari", ru: "Агенты AI Режим 2.0" },
+    "url analyst":          { uz: "url tahlilchi",          ru: "url-аналитик" },
+    "content analyst":      { uz: "kontent tahlilchi",      ru: "контент-аналитик" },
+    "prompt guard":         { uz: "prompt himoyachi",       ru: "prompt-защита" },
+    "soc verdict":          { uz: "soc hukmi",              ru: "вердикт soc" },
+    "AI Investigation":     { uz: "AI tekshiruvi",          ru: "AI-расследование" },
+    "AI Insight:":          { uz: "AI tahlili:",            ru: "AI-анализ:" },
+    "Overall Risk":         { uz: "Umumiy xavf",            ru: "Общий риск" },
+    "Attachments":          { uz: "Ilovalar",               ru: "Вложения" },
+    "Details":              { uz: "Tafsilotlar",            ru: "Подробности" },
+    // Timeline events
+    "received":             { uz: "qabul qilindi",          ru: "получено" },
+    "analyzed":             { uz: "tahlil qilindi",         ru: "проанализировано" },
+    "policy_evaluated":     { uz: "siyosat baholandi",      ru: "политика оценена" },
+    "rules_matched":        { uz: "qoidalar mos keldi",     ru: "правила совпали" },
+    "mitre_mapped":         { uz: "MITRE bog'landi",        ru: "MITRE сопоставлено" },
+    "quarantined":          { uz: "karantinга olindi",      ru: "помещено в карантин" },
+    "case_created":         { uz: "ish yaratildi",          ru: "дело создано" },
+    "playbook":             { uz: "ssenariy",               ru: "плейбук" },
+    // SOC / cases / framework
+    "Case Management":      { uz: "Ishlarni boshqarish",    ru: "Управление делами" },
+    "Open Cases":           { uz: "Ochiq ishlar",           ru: "Открытые дела" },
+    "Audit Log":            { uz: "Audit jurnali",          ru: "Журнал аудита" },
+    "Audit Events":         { uz: "Audit hodisalari",       ru: "События аудита" },
+    "Findings":             { uz: "Topilmalar",             ru: "Находки" },
+    "Framework Center":     { uz: "Freymvork markazi",      ru: "Центр фреймворка" },
+    "Detection-as-Code Rules": { uz: "Kod-sifatida-aniqlash qoidalari", ru: "Правила обнаружения как код" },
+    "IOCs":                 { uz: "IOC lar",                ru: "IOC" },
+    "Learned Reputation":   { uz: "O'rganilgan obro'",      ru: "Выученная репутация" },
+    "Learned Bad":          { uz: "O'rganilgan yomon",      ru: "Выучено как плохое" },
+    "Learned Trusted":      { uz: "O'rganilgan ishonchli",  ru: "Выучено как доверенное" },
+    "False Positives":      { uz: "Yolg'on ijobiylar",      ru: "Ложные срабатывания" },
+    // Settings
+    "Change Password":      { uz: "Parolni o'zgartirish",   ru: "Сменить пароль" },
+    "Current Password":     { uz: "Joriy parol",            ru: "Текущий пароль" },
+    "New Password":         { uz: "Yangi parol",            ru: "Новый пароль" },
+    "Auto-Quarantine Threshold": { uz: "Avto-karantin chegarasi", ru: "Порог авто-карантина" },
+    "Model":                { uz: "Model",                  ru: "Модель" },
+    "API Key / Token":      { uz: "API kalit / Token",      ru: "API-ключ / Токен" },
+    "Base URL":             { uz: "Asosiy URL",             ru: "Базовый URL" },
+    "IMAP Server":          { uz: "IMAP server",            ru: "IMAP-сервер" },
+    "GoPhish URL":          { uz: "GoPhish URL",            ru: "GoPhish URL" },
+    "Event Format":         { uz: "Hodisa formati",         ru: "Формат события" },
+    "Minimum Risk Score to Forward": { uz: "Yuborish uchun minimal xavf bahosi", ru: "Мин. оценка риска для отправки" },
+    "Admin API Key":        { uz: "Admin API kaliti",       ru: "Админ API-ключ" },
+    // Simulations
+    "Phishing Simulation":  { uz: "Phishing simulyatsiya",  ru: "Фишинг-симуляция" },
+    "AI Automated":         { uz: "AI avtomatik",           ru: "AI автоматически" },
+    "Manual":               { uz: "Qo'lda",                 ru: "Вручную" },
+    "Campaign History":     { uz: "Kampaniyalar tarixi",    ru: "История кампаний" },
+    "Click Rate":           { uz: "Bosish darajasi",        ru: "Процент переходов" },
+    "Emails Sent":          { uz: "Yuborilgan xatlar",      ru: "Отправлено писем" },
+    "Employees Who Clicked": { uz: "Bosgan xodimlar",       ru: "Сотрудники, кликнувшие" },
+    "Automated scheduled campaigns": { uz: "Avtomatik rejalashtirilgan kampaniyalar", ru: "Автоматические кампании по расписанию" },
+    "Department":           { uz: "Bo'lim",                 ru: "Отдел" },
+    "Add":                  { uz: "Qo'shish",               ru: "Добавить" },
+    "Import":               { uz: "Import",                 ru: "Импорт" },
+    "Ask":                  { uz: "So'rash",                ru: "Спросить" },
+    "Enabled":              { uz: "Yoqilgan",               ru: "Включено" },
+    "Hits":                 { uz: "Urinishlar",             ru: "Срабатывания" },
+    "Actor":                { uz: "Ijrochi",                ru: "Исполнитель" },
+    "Confirmed Phishing":   { uz: "Tasdiqlangan fishing",   ru: "Подтверждённый фишинг" },
+    "Set a new password":   { uz: "Yangi parol o'rnating",  ru: "Установите новый пароль" },
+    "A password change is required before continuing.":
+      { uz: "Davom etishdan oldin parolni o'zgartirish majburiy.",
+        ru: "Перед продолжением необходимо сменить пароль." },
+    "Confirm password":     { uz: "Parolni tasdiqlang",     ru: "Подтвердите пароль" }
+  });
+
   var LANGS = { uz: "O'zbek", ru: "Русский", en: "English" };
   var DEFAULT_LANG = "uz";
   var LANG = "en";                 // DOM currently shows English until applied
@@ -189,14 +282,22 @@
   }
 
   function injectToggle() {
-    if (document.getElementById("lang-toggle")) return;
-    var btn = document.createElement("button");
+    var btn = document.getElementById("lang-toggle");
+    if (btn) {
+      // Reuse the button placed in the header (no overlap with the bell).
+      if (!btn._wired) { btn.addEventListener("click", cycleLang); btn._wired = true; }
+      updateToggle();
+      return;
+    }
+    // Fallback: no header slot (e.g. login screen) → a small fixed control.
+    btn = document.createElement("button");
     btn.id = "lang-toggle";
     btn.type = "button";
     btn.title = "Til / Язык / Language";
     btn.className = "px-2 py-1 text-xs font-semibold rounded border border-cyber-border text-gray-300 hover:text-cyber-neon hover:border-cyber-neon/50 transition-colors";
-    btn.style.cssText = "position:fixed;top:10px;right:14px;z-index:9999;background:#13131a;";
+    btn.style.cssText = "position:fixed;top:12px;right:16px;z-index:9999;background:#13131a;";
     btn.addEventListener("click", cycleLang);
+    btn._wired = true;
     document.body.appendChild(btn);
     updateToggle();
   }

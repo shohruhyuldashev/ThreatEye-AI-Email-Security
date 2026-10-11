@@ -87,6 +87,29 @@
         </div>
     </div>
 
+    <!-- Forced password-change modal (shown on first login / default admin) -->
+    <div id="pwchange-overlay" class="fixed inset-0 z-[110] bg-cyber-dark/95 flex items-center justify-center hidden">
+        <div class="glass-card rounded-xl p-8 max-w-sm w-full mx-4 border border-cyber-border shadow-[0_0_30px_rgba(0,255,157,0.1)]">
+            <div class="text-center mb-6">
+                <i class="fa-solid fa-key text-cyber-neon text-3xl mb-3"></i>
+                <h2 class="text-xl font-bold text-white">Set a new password</h2>
+                <p class="text-xs text-gray-500 mt-2">A password change is required before continuing.</p>
+            </div>
+            <form id="pwchange-form" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">New Password</label>
+                    <input type="password" id="pw-new" minlength="8" required class="cyber-input w-full rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-cyber-neon" placeholder="••••••••">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 uppercase tracking-widest mb-1">Confirm password</label>
+                    <input type="password" id="pw-confirm" minlength="8" required class="cyber-input w-full rounded-lg px-4 py-2 text-sm text-gray-300 focus:border-cyber-neon" placeholder="••••••••">
+                </div>
+                <div id="pw-error" class="hidden text-center text-xs text-cyber-danger bg-cyber-danger/10 py-2 rounded"></div>
+                <button type="submit" class="w-full py-2.5 bg-cyber-neon text-black font-bold rounded-lg hover:bg-[#00cc7a] transition-all">Update Password</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Main App Content wrapper -->
     <div id="main-app-content" class="flex w-full h-full opacity-0 pointer-events-none transition-opacity duration-500">
         <!-- Sidebar Navigation -->
@@ -191,6 +214,8 @@
             </div>
 
             <div class="flex items-center space-x-4">
+                <button id="lang-toggle" type="button" title="Til / Язык / Language"
+                    class="px-2.5 py-1 text-xs font-semibold rounded border border-cyber-border text-gray-300 hover:text-cyber-neon hover:border-cyber-neon/50 transition-colors">UZ</button>
                 <div class="relative">
                     <button id="notification-btn" class="relative p-2 text-gray-400 hover:text-white transition-colors">
                         <i class="fa-regular fa-bell text-lg"></i>
@@ -244,8 +269,8 @@
 
     </div> <!-- End Main App Content -->
 
-    <script src="app.js?v=24"></script>
-    <script src="i18n.js?v=2"></script>
+    <script src="app.js?v=25"></script>
+    <script src="i18n.js?v=3"></script>
 </body>
 
 </html>

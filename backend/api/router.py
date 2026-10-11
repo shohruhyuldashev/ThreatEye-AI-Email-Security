@@ -401,17 +401,25 @@ def analyze_url_endpoint(req: URLAnalyzeRequest, _auth: dict = Depends(require_a
 
 @router.get("/notifications")
 def get_notifications(_auth: dict = Depends(require_auth)):
-    """Returns top 5 latest high-risk alerts or quarantines for the bell dropdown."""
+    """
+    Bell dropdown: ONLY suspicious + quarantined mail becomes an alert (delivered
+    low-risk mail is not alerted — it is still written to the SIEM and the logs).
+    Suspicious = delivered but risk_score at/above the suspicious band.
+    """
+    SUSPICIOUS_MIN = int(os.getenv("ALERT_SUSPICIOUS_MIN_SCORE", "40"))
     conn = get_db_connection()
     c = conn.cursor()
     c.execute('''
-        SELECT 'quarantine' as type, q.quarantined_at as time, e.subject, q.ai_reason as details,
-               e.id as email_id, e.status
-        FROM quarantine q
-        JOIN emails e ON q.email_id = e.id
-        WHERE e.organization_id = ?
-        ORDER BY q.quarantined_at DESC LIMIT 5
-    ''', (_org_id(_auth),))
+        SELECT
+            CASE WHEN status = 'Quarantined' THEN 'quarantine' ELSE 'suspicious' END as type,
+            timestamp as time, subject,
+            COALESCE(recommended_action, ai_analysis_log, threat_type) as details,
+            id as email_id, status, risk_score
+        FROM emails
+        WHERE organization_id = ?
+          AND (status = 'Quarantined' OR risk_score >= ?)
+        ORDER BY timestamp DESC LIMIT 8
+    ''', (_org_id(_auth), SUSPICIOUS_MIN))
     notifications = [dict(row) for row in c.fetchall()]
     conn.close()
     return notifications

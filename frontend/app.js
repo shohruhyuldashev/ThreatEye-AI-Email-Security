@@ -112,41 +112,53 @@ document.addEventListener('DOMContentLoaded', () => {
     // Forced first-login password change: the server holds the session but blocks
     // every non-auth call until the shipped admin/admin default is replaced. Prompt
     // until a valid new password is set, then let the app load.
-    async function forcePasswordChange(currentPass) {
-        while (true) {
-            const newPass = window.prompt(
-                "A password change is required before you can continue.\n\n" +
-                "Enter a new password (at least 8 characters, different from the current one):"
-            );
-            if (newPass === null) { return false; }  // cancelled → back to login
-            if (newPass.length < 8) {
-                window.alert("Password must be at least 8 characters.");
-                continue;
-            }
-            const confirmPass = window.prompt("Re-enter the new password to confirm:");
-            if (confirmPass === null) { return false; }
-            if (newPass !== confirmPass) {
-                window.alert("Passwords did not match. Try again.");
-                continue;
-            }
-            try {
-                const res = await fetch(`${API_BASE}/auth/change-password`, {
-                    method: 'POST',
-                    credentials: 'include',
-                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-                    body: JSON.stringify({ current_password: currentPass, new_password: newPass })
-                });
-                if (res.ok) {
-                    csrfToken = (await res.json()).csrf_token || csrfToken;
-                    window.alert("Password updated. Signing you in…");
-                    return true;
+    // Forced first-login password change — a proper in-page modal (not a prompt).
+    function forcePasswordChange(currentPass) {
+        return new Promise((resolve) => {
+            const overlay = document.getElementById('pwchange-overlay');
+            const form = document.getElementById('pwchange-form');
+            const errBox = document.getElementById('pw-error');
+            const newEl = document.getElementById('pw-new');
+            const confEl = document.getElementById('pw-confirm');
+            if (!overlay || !form) { resolve(false); return; }
+
+            const showErr = (msg) => { errBox.textContent = msg; errBox.classList.remove('hidden'); };
+            newEl.value = ''; confEl.value = ''; errBox.classList.add('hidden');
+            overlay.classList.remove('hidden');
+            setTimeout(() => newEl.focus(), 50);
+
+            const onSubmit = async (e) => {
+                e.preventDefault();
+                errBox.classList.add('hidden');
+                const np = newEl.value, cp = confEl.value;
+                if (np.length < 8) return showErr('Parol kamida 8 belgidan iborat bo\'lsin.');
+                if (np !== cp) return showErr('Parollar mos kelmadi.');
+                const btn = form.querySelector('button[type=submit]');
+                const orig = btn.innerHTML;
+                btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                try {
+                    const res = await fetch(`${API_BASE}/auth/change-password`, {
+                        method: 'POST', credentials: 'include',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                        body: JSON.stringify({ current_password: currentPass, new_password: np })
+                    });
+                    if (res.ok) {
+                        csrfToken = (await res.json()).csrf_token || csrfToken;
+                        overlay.classList.add('hidden');
+                        form.removeEventListener('submit', onSubmit);
+                        resolve(true);
+                        return;
+                    }
+                    const data = await res.json().catch(() => ({}));
+                    showErr(data.detail || 'Parolni yangilab bo\'lmadi. Qayta urining.');
+                } catch (err) {
+                    showErr('Tarmoq xatosi. Qayta urining.');
+                } finally {
+                    btn.disabled = false; btn.innerHTML = orig;
                 }
-                const data = await res.json().catch(() => ({}));
-                window.alert(data.detail || "Could not update the password. Try again.");
-            } catch (e) {
-                window.alert("Network error while changing the password. Try again.");
-            }
-        }
+            };
+            form.addEventListener('submit', onSubmit);
+        });
     }
 
     // Define the HTML content for each view

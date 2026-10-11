@@ -471,6 +471,41 @@ def _auth_floor(a_score: int, has_url: bool, solicits: bool, suspicious_tld: boo
     return floor
 
 
+_LANG_NAMES = {"uz": "O'zbek (Uzbek)", "ru": "Русский (Russian)", "en": "English"}
+
+
+def detection_language() -> str:
+    """
+    Language for the human-readable LLM output (explanation / threat_type /
+    recommended_action / agent verdicts). From the `detection_language` setting,
+    else DETECTION_LANG env, default O'zbek. Cached-free, cheap, fail-safe.
+    """
+    try:
+        from db import get_db_connection
+        conn = get_db_connection(); c = conn.cursor()
+        c.execute("SELECT value FROM settings WHERE key = 'detection_language'")
+        row = c.fetchone(); conn.close()
+        if row and row["value"] in _LANG_NAMES:
+            return row["value"]
+    except Exception:
+        pass
+    import os
+    lang = os.getenv("DETECTION_LANG", "uz").lower()
+    return lang if lang in _LANG_NAMES else "uz"
+
+
+def _language_directive() -> str:
+    lang = detection_language()
+    if lang == "en":
+        return "Write all human-readable text fields in clear English."
+    return (
+        f"IMPORTANT: Write every human-readable text field — explanation, threat_type, "
+        f"recommended_action, and each agent 'verdict' — in {_LANG_NAMES[lang]}. "
+        f"Keep JSON keys and numeric scores unchanged. Detect phishing regardless of the "
+        f"email's own language."
+    )
+
+
 def _ml_layer(email_text: str, metadata: dict | None, urls: list) -> tuple[int, bool]:
     """CPU ML phishing probability (0-100), or (0, False) if the model is absent."""
     try:
@@ -603,6 +638,8 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     4. SOC Verdict: final analyst-ready conclusion.
 
     Calculate LLM phishing probability (0-100), confidence (0-100), short evidence, and recommended action.
+
+    {_language_directive()}
 
     SCORING SCALE — every "score" field below is an integer from 0 to 100, NOT 0-10:
       0-20   benign
