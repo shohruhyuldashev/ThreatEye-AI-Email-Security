@@ -92,6 +92,10 @@ def send_to_siem(event_type: str, payload: dict[str, Any], cfg: dict[str, str] |
     body = format_event(cfg.get("format", "raw"), event_type, payload)
     if not cfg.get("webhook_url"):
         return {"status": "skipped", "response_code": None, "error": "No SIEM webhook configured", "destination": "not_configured"}
+    from framework.egress import is_allowed
+    allowed, reason = is_allowed(cfg["webhook_url"])
+    if not allowed:
+        return {"status": "failed", "response_code": None, "error": f"Egress blocked: {reason}", "destination": cfg["webhook_url"]}
     try:
         resp = requests.post(cfg["webhook_url"], json=body, headers=_auth_headers(cfg), timeout=6)
         status = "sent" if 200 <= resp.status_code < 300 else "failed"

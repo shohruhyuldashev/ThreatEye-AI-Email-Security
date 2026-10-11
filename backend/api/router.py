@@ -1702,6 +1702,11 @@ def test_imap_connection(req: IMAPTestRequest, _auth: dict = Depends(require_rol
     if not (server and user and password):
         raise HTTPException(status_code=400, detail="Provide IMAP server, username and password (or save them first).")
 
+    from framework.egress import is_allowed
+    allowed, reason = is_allowed(server)
+    if not allowed:
+        raise HTTPException(status_code=400, detail=f"IMAP server not permitted: {reason}")
+
     try:
         from imap_tools import MailBoxUnencrypted, MailBox
         # Try unencrypted first for local labs, fallback to SSL.
@@ -1736,6 +1741,12 @@ def test_ai_connection(req: AITestRequest, _auth: dict = Depends(require_role("a
     if not api_key:
         api_key = "ollama" if provider == "ollama" else "not-needed"
     model = req.model.strip() or (preset.get("default_model") if req.provider else saved["model"]) or saved["model"]
+
+    if base_url:
+        from framework.egress import is_allowed
+        allowed, reason = is_allowed(base_url)
+        if not allowed:
+            raise HTTPException(status_code=400, detail=f"AI base URL not permitted: {reason}")
 
     try:
         client = OpenAI(api_key=api_key, base_url=base_url, timeout=LLM_TIMEOUT, max_retries=1)

@@ -52,6 +52,10 @@ def _record(cursor, organization_id, email_id, action_type, target, status, deta
 
 
 def _post_json(url: str, body: dict[str, Any], headers: dict | None = None) -> tuple[str, str]:
+    from framework.egress import is_allowed
+    allowed, reason = is_allowed(url)
+    if not allowed:
+        return "failed", f"Egress blocked: {reason}"
     try:
         resp = requests.post(url, json=body, headers=headers or {}, timeout=6)
         if 200 <= resp.status_code < 300:

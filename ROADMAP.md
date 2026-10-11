@@ -5,7 +5,7 @@ feature-complete, self-hosted lab/MVP) to something companies can deploy and tha
 sold globally as a product/SaaS. It is honest about what is missing and orders the work by
 what blocks real use first.
 
-> **Progress (2026-07-19):** ✅ tenant isolation complete (all reads org-scoped, cross-tenant tested) · ✅ settings secrets encrypted at rest (Fernet) · ✅ production hardening (no `--reload`, workers, startup secret guard) · ✅ per-tenant ingestion rate limits. Next: async task queue, signup/billing.
+> **Progress (2026-10-11):** ✅ tenant isolation complete (all reads org-scoped, cross-tenant tested) · ✅ settings secrets encrypted at rest (Fernet) · ✅ production hardening (no `--reload`, workers, startup secret guard) · ✅ per-tenant ingestion rate limits · ✅ SSRF egress guard on all admin-controlled outbound targets. Next: admin-password-change on first login + TLS-by-default; then async task queue, signup/billing.
 >
 > **Current verdict.** ThreatEye works end-to-end and is a strong foundation, but it is
 > **not yet a production multi-tenant SaaS**. It is safe today only as an **internal tool or
@@ -42,9 +42,12 @@ what blocks real use first.
   `organization_id` — `GET /iocs`, `/cases`, `/audit-log`, `/siem-events`,
   `/mitre-mappings`. In a multi-tenant deployment one customer can read another customer's
   data. **This is a hard blocker for any SaaS.**
-- **Admin-authenticated SSRF surface.** `test-imap`, `test-siem`, the URL analyzer and WHOIS
+- ~~**Admin-authenticated SSRF surface.** `test-imap`, `test-siem`, the URL analyzer and WHOIS
   reach arbitrary hosts by design; in a hosted setting a tenant admin could probe internal
-  infrastructure. Needs egress allow-listing / a broker.
+  infrastructure.~~ **Mitigated** by `framework/egress.py` (blocks private/loopback/link-local/
+  reserved + the metadata IP; allow-lists bundled service names; `EGRESS_*` env). Note: the
+  URL analyzer/WHOIS do not actually fetch (offline typosquat scoring). Residual: resolve-then-
+  connect leaves a DNS-rebinding TOCTOU window — pinning the resolved IP is a follow-up.
 - **Secrets stored in plaintext in the DB.** SIEM/AI/GoPhish/M365/Google credentials are
   masked in the API but not encrypted at rest. Needs envelope encryption (KMS/Vault/Fernet).
 - **Dev conveniences shipped on.** `--reload` in the backend Dockerfile (single worker),
@@ -100,7 +103,7 @@ what blocks real use first.
 - [ ] Force an admin-password change on first login; drop `admin/admin`.
 - [ ] `COOKIE_SECURE=true` + TLS as the default deployment path; HSTS.
 - [x] Encrypt settings secrets at rest (Fernet/KMS); key management documented.
-- [ ] Egress allow-list for `test-imap`/`test-siem`/URL-analyzer/WHOIS (kill the open SSRF).
+- [x] Egress allow-list for `test-imap`/`test-siem`/AI base-URL/integrations webhooks (kill the open SSRF) — `framework/egress.py`, blocks private/loopback/link-local/reserved + metadata IP, allow-lists bundled service names; `EGRESS_*` env.
 - [ ] Backups + restore runbook for Postgres; metrics alerting.
 
 ### Phase 1 — True multi-tenant SaaS (unlocks external customers) — ~1–3 months
