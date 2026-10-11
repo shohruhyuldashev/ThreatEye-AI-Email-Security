@@ -98,10 +98,14 @@ def investigate_email(organization_id: int, email_id: int) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- ask
 def _search_term(question: str) -> str | None:
-    m = _TOKEN.search(question or "")
+    # Bound the input before any regex: the token pattern has super-linear
+    # backtracking on adversarial input, so a long copilot question must not be
+    # able to stall the worker (polynomial ReDoS).
+    q = (question or "")[:500]
+    m = _TOKEN.search(q)
     if m:
         return m.group(0).lower()
-    words = [w.lower() for w in re.findall(r"[A-Za-z]{4,}", question or "") if w.lower() not in _STOP]
+    words = [w.lower() for w in re.findall(r"[A-Za-z]{4,}", q) if w.lower() not in _STOP]
     return words[0] if words else None
 
 

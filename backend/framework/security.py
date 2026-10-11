@@ -74,8 +74,14 @@ def generate_api_key() -> str:
 
 
 def hash_api_key(key: str) -> str:
-    """Deterministic SHA-256 hash so we can look keys up by value without storing them."""
-    return hashlib.sha256(key.encode()).hexdigest()
+    """
+    Deterministic keyed hash (HMAC-SHA256 under the server's auth secret) so keys
+    can be looked up by value without storing them. Keying the hash means an
+    attacker who reads the api_keys table still cannot verify guessed keys offline
+    without the server secret. API keys are high-entropy random tokens, so a fast
+    keyed hash is the right primitive here (a slow KDF is for low-entropy passwords).
+    """
+    return hmac.new(AUTH_SECRET.encode(), key.encode(), hashlib.sha256).hexdigest()
 
 
 # --- token signing secret -------------------------------------------------------

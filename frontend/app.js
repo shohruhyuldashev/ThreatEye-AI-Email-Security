@@ -2236,7 +2236,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const senderLower = escapeHTML(String(r.sender || '').toLowerCase());
                 const subjectLower = escapeHTML(String(r.subject || '').toLowerCase());
                 const status = escapeHTML(r.status);
-                const isInternal = String(r.sender || '').includes('internal.com') || String(r.sender || '').includes('corp.com');
+                // Match the sender's actual domain (the part after @), not a loose
+                // substring — "internal.com.evil.com" must NOT read as internal.
+                const senderDomain = String(r.sender || '').toLowerCase().split('@').pop();
+                const isInternal = senderDomain === 'internal.com' || senderDomain === 'corp.com';
                 const isDanger = r.risk_score > 70 || r.url_threat_score > 70;
                 const statusColor = r.status === 'Quarantined' ? 'bg-cyber-danger/20 text-cyber-danger border border-cyber-danger/30' : 'bg-cyber-neon/10 text-cyber-neon border border-cyber-neon/20';
 

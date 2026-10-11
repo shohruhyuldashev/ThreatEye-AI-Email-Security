@@ -176,9 +176,12 @@ def ready():
         c.fetchone()
         conn.close()
         return {"status": "ready", "database": "ok"}
-    except Exception as e:
+    except Exception:
+        # /ready is unauthenticated, so never return the raw DB error to the caller —
+        # log it server-side and expose only that the DB is unreachable.
+        logging.getLogger("threateye.ready").exception("Readiness check failed")
         from fastapi.responses import JSONResponse
-        return JSONResponse(status_code=503, content={"status": "not_ready", "error": str(e)})
+        return JSONResponse(status_code=503, content={"status": "not_ready", "database": "unreachable"})
 
 
 @app.get("/metrics")
