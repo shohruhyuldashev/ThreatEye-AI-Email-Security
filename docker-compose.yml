@@ -95,9 +95,6 @@ services:
     volumes:
       - ./backend:/app
       - ./uploads:/app/uploads
-      # Sample .tap packs, mounted where the repo-relative test path resolves to
-      # inside the container (/app/tests/../../plugins).
-      - ./plugins:/plugins:ro
       # MITRE-anchored phishing-technique corpus read by framework/phish_corpus.py.
       - ./data:/data:ro
     environment:

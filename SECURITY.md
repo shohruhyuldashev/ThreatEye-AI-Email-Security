@@ -18,7 +18,7 @@ built in, what you must still configure, and the known limitations of the lab de
 | Secret exposure | `admin_password` / `auth_secret` are never returned by `GET /api/settings`; other `*pass*/*key*/*secret*/*token*` settings (AI key, SIEM key, GoPhish key, Google SA JSON, …) are masked. |
 | HTTP headers | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cache-Control: no-store` on API responses. |
 | CORS | Explicit origin allow-list; credentials enabled only for the configured dashboard origin(s) (`CORS_ALLOWED_ORIGINS`), methods/headers restricted, `X-CSRF-Token`/`X-API-Key` allowed. |
-| Uploads | Extension-restricted (`.txt` / `.csv` / `.tap`), filename-sanitised, randomly renamed, size-capped. |
+| Uploads | Extension-restricted (`.txt` / `.csv`), filename-sanitised, randomly renamed, size-capped. |
 | SQL | All queries parameterised; the few dynamic identifiers come from hard-coded allow-lists, not user input. |
 | Output rendering | The frontend HTML-escapes all attacker-influenced fields (sender, subject, evidence, timeline) before injecting them into the DOM. |
 | Network exposure | `docker-compose.yml` binds Postgres, Redis and Ollama to `127.0.0.1` only. |

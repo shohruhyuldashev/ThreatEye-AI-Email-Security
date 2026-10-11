@@ -50,7 +50,6 @@ class DbCursor:
         "sim_campaigns",
         "phishing_reports",
         "reputation",
-        "plugins",
     }
 
     def __init__(self, cursor):

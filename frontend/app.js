@@ -828,7 +828,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         <button data-settings-tab="ai" onclick="switchSettingsTab('ai')" class="settings-tab flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg text-left whitespace-nowrap transition-colors"><i class="fa-solid fa-brain w-4"></i> AI Engine</button>
                         <button data-settings-tab="email" onclick="switchSettingsTab('email')" class="settings-tab flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg text-left whitespace-nowrap transition-colors"><i class="fa-solid fa-envelope w-4"></i> Email (IMAP)</button>
                         <button data-settings-tab="integrations" onclick="switchSettingsTab('integrations')" class="settings-tab flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg text-left whitespace-nowrap transition-colors"><i class="fa-solid fa-share-nodes w-4"></i> Integrations</button>
-                        <button data-settings-tab="plugins" onclick="switchSettingsTab('plugins')" class="settings-tab flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg text-left whitespace-nowrap transition-colors"><i class="fa-solid fa-puzzle-piece w-4"></i> Plugins</button>
                         <button data-settings-tab="security" onclick="switchSettingsTab('security')" class="settings-tab flex items-center gap-3 px-4 py-2.5 text-sm font-medium rounded-lg text-left whitespace-nowrap transition-colors"><i class="fa-solid fa-lock w-4"></i> Security</button>
                     </nav>
 
@@ -960,15 +959,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
 
-                        <!-- Plugins -->
-                        <div data-settings-panel="plugins" class="hidden glass-card rounded-xl p-6">
-                            <div class="mb-4"><h3 class="text-lg font-semibold text-white">Detection Plugins <span class="text-xs font-normal text-gray-500 ml-1">.tap packs</span></h3><p class="text-xs text-gray-500 mt-1">Upload a <code class="text-cyber-neon">.tap</code> pack of detection rules, threat-intel and playbooks. Declarative only — no code runs on the server.</p></div>
-                            <form id="plugin-upload-form" class="flex gap-3 mb-5">
-                                <input type="file" id="plugin-file" accept=".tap,.json" required class="cyber-input flex-1 p-2 rounded-lg text-sm file:mr-3 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-cyber-info/20 file:text-cyber-info cursor-pointer">
-                                <button type="submit" class="py-2 px-4 bg-cyber-info/10 border border-cyber-info text-cyber-info hover:bg-cyber-info/20 rounded-lg text-sm font-medium whitespace-nowrap"><i class="fa-solid fa-upload mr-1"></i> Install</button>
-                            </form>
-                            <div id="plugins-list" class="space-y-2"></div>
-                        </div>
 
                         <!-- Security -->
                         <div data-settings-panel="security" class="hidden glass-card rounded-xl p-6">
@@ -2985,59 +2975,6 @@ document.addEventListener('DOMContentLoaded', () => {
         loadSimResults();
     }
 
-    async function loadPlugins() {
-        const el = document.getElementById('plugins-list');
-        if (!el) return;
-        try {
-            const res = await apiFetch(`${API_BASE}/plugins`);
-            const plugins = await res.json();
-            if (!Array.isArray(plugins) || !plugins.length) {
-                el.innerHTML = '<div class="text-sm text-gray-500 py-2">No plugins installed.</div>';
-                return;
-            }
-            el.innerHTML = plugins.map(p => {
-                const c = p.counts || {};
-                const badge = p.signed
-                    ? '<span class="text-[10px] px-2 py-0.5 rounded bg-cyber-neon/20 text-cyber-neon">signed</span>'
-                    : '<span class="text-[10px] px-2 py-0.5 rounded bg-cyber-warning/20 text-cyber-warning">unverified</span>';
-                return `
-                <div class="flex justify-between items-center p-3 rounded bg-cyber-dark border border-cyber-border">
-                    <div>
-                        <div class="text-white text-sm font-medium">${escapeHTML(p.name)} <span class="text-gray-600 text-xs">v${escapeHTML(String(p.version || ''))}</span> ${badge}</div>
-                        <div class="text-xs text-gray-500">${escapeHTML(p.description || '')}</div>
-                        <div class="text-[11px] text-gray-600 mt-1">by ${escapeHTML(p.author || 'unknown')} · rules ${c.rules || 0} · intel ${c.intel || 0} · playbooks ${c.playbooks || 0}</div>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button onclick="togglePlugin('${escapeHTML(p.plugin_id)}', ${p.enabled ? 'false' : 'true'})" class="text-xs px-2 py-1 rounded border ${p.enabled ? 'border-cyber-neon/40 text-cyber-neon' : 'border-cyber-border text-gray-500'}">${p.enabled ? 'Enabled' : 'Disabled'}</button>
-                        <button onclick="removePlugin('${escapeHTML(p.plugin_id)}')" class="text-xs px-2 py-1 rounded text-gray-400 hover:text-cyber-danger">Remove</button>
-                    </div>
-                </div>`;
-            }).join('');
-        } catch (e) {
-            el.innerHTML = '<div class="text-sm text-cyber-danger py-2">Failed to load plugins.</div>';
-        }
-    }
-
-    window.togglePlugin = async function (id, enabled) {
-        try {
-            const res = await apiFetch(`${API_BASE}/plugins/${encodeURIComponent(id)}/toggle`, {
-                method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled })
-            });
-            if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Toggle failed'); }
-            loadPlugins();
-        } catch (e) { showCustomAlert(e.message, 'Plugin', true); }
-    };
-
-    window.removePlugin = async function (id) {
-        const ok = await showCustomConfirm(`Remove plugin "${id}" and all content it added?`, 'Remove Plugin');
-        if (!ok) return;
-        try {
-            const res = await apiFetch(`${API_BASE}/plugins/${encodeURIComponent(id)}`, { method: 'DELETE' });
-            if (!res.ok) { const d = await res.json(); throw new Error(d.detail || 'Remove failed'); }
-            loadPlugins();
-        } catch (e) { showCustomAlert(e.message, 'Plugin', true); }
-    };
-
     window.switchSettingsTab = function (name) {
         document.querySelectorAll('#settings-view [data-settings-panel]').forEach(p => {
             p.classList.toggle('hidden', p.dataset.settingsPanel !== name);
@@ -3057,27 +2994,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const rangeSlider = document.getElementById('setting-ai-threshold');
         const rangeVal = document.getElementById('setting-ai-threshold-val');
         switchSettingsTab('ai');  // initialise the active section
-
-        const pluginForm = document.getElementById('plugin-upload-form');
-        if (pluginForm) {
-            pluginForm.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const fileInput = document.getElementById('plugin-file');
-                if (!fileInput || !fileInput.files.length) return;
-                const fd = new FormData();
-                fd.append('file', fileInput.files[0]);
-                try {
-                    const res = await apiFetch(`${API_BASE}/plugins/upload`, { method: 'POST', body: fd });
-                    const data = await res.json();
-                    if (!res.ok) throw new Error(data.detail || 'Install failed');
-                    const c = data.installed || {};
-                    showCustomAlert(`Installed "${data.name}" — rules ${c.rules || 0}, intel ${c.intel || 0}, playbooks ${c.playbooks || 0}.`, 'Plugin Installed');
-                    pluginForm.reset();
-                    loadPlugins();
-                } catch (err) { showCustomAlert(err.message, 'Install Failed', true); }
-            });
-        }
-        loadPlugins();
 
         // Dynamic slider value display
         if (rangeSlider && rangeVal) {

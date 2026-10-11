@@ -205,9 +205,6 @@ class AITestRequest(BaseModel):
     base_url: str = ""
     model: str = ""
 
-class PluginToggleRequest(BaseModel):
-    enabled: bool = True
-
 def _org_id(auth: dict) -> int:
     """Tenant id from a validated token payload (defaults to the primary org)."""
     try:
@@ -1617,51 +1614,6 @@ def sync_sim_behavior_endpoint(_auth: dict = Depends(require_role("analyst"))):
     result = sync_sim_behavior(_org_id(_auth))
     audit_log("sim_behavior_synced", _auth.get("sub", "analyst"), "user_profiles", str(_org_id(_auth)), str(result), organization_id=_org_id(_auth))
     return result
-
-# ------------------------------- Plugins (.tap) ---------------------------------
-@router.get("/plugins")
-def list_plugins_endpoint(_auth: dict = Depends(require_auth)):
-    from framework.plugins import list_plugins
-    return list_plugins(_org_id(_auth))
-
-@router.post("/plugins/upload")
-def upload_plugin(file: UploadFile = File(...), _auth: dict = Depends(require_role("admin"))):
-    """Upload and install a .tap plugin (declarative detection content — no code execution)."""
-    from framework.plugins import parse_tap, install_plugin, PluginError
-    name = (file.filename or "").lower()
-    if not name.endswith(".tap") and not name.endswith(".json"):
-        raise HTTPException(status_code=400, detail="Plugin file must have a .tap extension")
-    raw = file.file.read(2 * 1024 * 1024 + 1)
-    if len(raw) > 2 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="Plugin too large (max 2MB)")
-    try:
-        tap = parse_tap(raw)
-        result = install_plugin(_org_id(_auth), tap, installed_by=_auth.get("sub", "admin"))
-    except PluginError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid plugin: {e}")
-    except Exception as e:
-        logger.error(f"Plugin install failed: {e}")
-        raise HTTPException(status_code=500, detail="Plugin install failed")
-    audit_log("plugin_installed", _auth.get("sub", "admin"), "plugin", result["plugin_id"],
-              f"{result['name']} signed={result['signed']}")
-    return {"status": "success", **result}
-
-@router.post("/plugins/{plugin_id}/toggle")
-def toggle_plugin(plugin_id: str, req: PluginToggleRequest, _auth: dict = Depends(require_role("admin"))):
-    from framework.plugins import set_enabled
-    if not set_enabled(_org_id(_auth), plugin_id, req.enabled):
-        raise HTTPException(status_code=404, detail="Plugin not found")
-    audit_log("plugin_toggled", _auth.get("sub", "admin"), "plugin", plugin_id, f"enabled={req.enabled}")
-    return {"status": "success", "enabled": req.enabled}
-
-@router.delete("/plugins/{plugin_id}")
-def delete_plugin(plugin_id: str, _auth: dict = Depends(require_role("admin"))):
-    from framework.plugins import remove_plugin
-    if not remove_plugin(_org_id(_auth), plugin_id):
-        raise HTTPException(status_code=404, detail="Plugin not found")
-    audit_log("plugin_removed", _auth.get("sub", "admin"), "plugin", plugin_id, "uninstalled")
-    return {"status": "success", "message": f"Plugin {plugin_id} removed"}
-
 
 def _saved_settings(keys: tuple) -> dict:
     conn = get_db_connection()

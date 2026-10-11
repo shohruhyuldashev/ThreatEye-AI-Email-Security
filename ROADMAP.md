@@ -24,7 +24,7 @@ what blocks real use first.
   SIEM export (ECS/OCSF → Elasticsearch/Kibana, verified end-to-end), SOAR-style playbooks.
 - Phishing simulation (GoPhish): AI-generated lure + landing page, click/submit tracking.
 - Platform: multi-tenant data model, RBAC (viewer→owner), API-key ingestion, SQL migrations,
-  JWT-cookie sessions + CSRF, Redis rate-limited login, `.tap` plugins, adaptive learning,
+  JWT-cookie sessions + CSRF, Redis rate-limited login, adaptive learning,
   attachment malware analysis, Prometheus metrics, 40 tests + CI.
 
 **What it is NOT (yet)**

@@ -24,7 +24,7 @@ Core pieces:
   landing page; GoPhish tracks who clicks and who submits (Collaborator-style).
 - **Real SIEM integration** — Elasticsearch + Kibana, ECS/OCSF export, configured from the
   admin panel.
-- Multi-tenant RBAC, JWT-cookie sessions, `.tap` detection plugins, adaptive learning,
+- Multi-tenant RBAC, JWT-cookie sessions, adaptive learning,
   attachment malware analysis, SOC copilot, PostgreSQL evidence store.
 
 ---
@@ -215,17 +215,6 @@ campaign.
 
 API: `POST /api/simulations/targets/upload`, `POST /api/simulations/trigger`
 (`mode=AI|Manual`), `GET /api/simulations/results`.
-
----
-
-## 🧩 Detection plugins (`.tap`)
-
-Extend detection without code. A **`.tap`** file is a JSON pack of *declarative* content —
-detection rules, threat-intel indicators, and playbooks — with **no executable code**.
-Upload from **Settings → Plugins** (`POST /api/plugins/upload`, admin); content goes live
-immediately. Optional HMAC signing marks packs trusted. Spec:
-[`docs/TAP_FORMAT.md`](docs/TAP_FORMAT.md); sample:
-[`plugins/samples/emotet-pack.tap`](plugins/samples/emotet-pack.tap).
 
 ---
 
