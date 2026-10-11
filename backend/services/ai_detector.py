@@ -254,7 +254,7 @@ def layer3_domain_intel(urls: list) -> tuple:
                 homoglyph_part = part.replace('rn', 'm').replace('1', 'l').replace('0', 'o')
                 if (homoglyph_part == brand or homoglyph_part.replace('m', 'rn') == brand) and part != brand:
                     features["typosquatting_target"] = brand
-                    ts_score = max(ts_score, 80)
+                    ts_score = max(ts_score, 85)  # deliberate homoglyph = high confidence
                     
                 # Calculate Levenshtein-like distance using SequenceMatcher
                 seq = difflib.SequenceMatcher(None, part, brand)
@@ -728,9 +728,16 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
         (bec_score * 0.10) +
         (injection_score * 0.06)
     )
-    final_score = max(final_score, d_score if d_score >= 85 else final_score)
+    final_score = max(final_score, d_score if d_score >= 75 else final_score)
     final_score = max(final_score, bec_score if bec_score >= 70 else final_score)
     final_score = max(final_score, injection_score if injection_score >= 70 else final_score)
+
+    # A CONFIRMED brand lookalike (typosquat / homoglyph like rnicrosoft→microsoft)
+    # is decisive on its own — even with no email-auth context (the URL analyzer)
+    # and even when the LLM is unavailable. Without this, a high domain score was
+    # diluted by the weighted average to a "safe" ~16%.
+    if d_features.get("typosquatting_target") and d_score >= 70:
+        final_score = max(final_score, max(d_score, 80))
 
     # --- Decisive-signal floors -------------------------------------------------
     # The weighted average above is designed to blend weak signals, but it also
@@ -773,6 +780,11 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
         final_score = max(final_score, 60)
         if d_score >= 50 or h_score >= 40:
             final_score = max(final_score, 85)
+
+    # General safety net: a decisive deterministic verdict is never averaged away,
+    # even when the LLM is slow or unavailable — this is what keeps detection strong
+    # on CPU. deterministic_high already folds in corpus/domain/BEC/injection/auth.
+    final_score = max(final_score, deterministic_high)
 
     # Independent CPU ML signal (language-agnostic, raise-only, fail-open).
     ml_prob, ml_ok = _ml_layer(email_text, metadata, urls)
