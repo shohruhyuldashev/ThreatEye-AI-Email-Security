@@ -560,6 +560,44 @@ def get_pdf_report(_auth: dict = Depends(require_auth)):
         headers={"Content-Disposition": f"attachment; filename=threat_report_{datetime.now().strftime('%Y%m%d')}.pdf"}
     )
 
+
+@router.get("/simulations/report/pdf")
+def simulation_awareness_report_pdf(
+    lang: str = Query("uz", pattern="^(uz|ru|en)$"),
+    _auth: dict = Depends(require_auth),
+):
+    """
+    AI security-awareness report: which departments are most vulnerable, which
+    phishing lures fool them, and the local LLM's conclusion + training
+    recommendations — rendered as a PDF in the chosen language (uz/ru/en).
+    """
+    from services.gophish_client import get_results
+    from framework.awareness import generate_awareness_report
+    from services.report_generator import generate_awareness_pdf
+
+    stats = get_stats(days=30, _auth=_auth)
+    results = get_results()
+    analysis = generate_awareness_report(results, lang=lang)
+    pdf_content = generate_awareness_pdf(stats, results, analysis, lang=lang)
+    return Response(
+        content=pdf_content,
+        media_type="application/pdf",
+        headers={"Content-Disposition":
+                 f"attachment; filename=awareness_report_{lang}_{datetime.now().strftime('%Y%m%d')}.pdf"},
+    )
+
+
+@router.get("/simulations/awareness")
+def simulation_awareness_json(
+    lang: str = Query("uz", pattern="^(uz|ru|en)$"),
+    _auth: dict = Depends(require_auth),
+):
+    """Same analysis as the PDF, as JSON — for showing the conclusion in the dashboard."""
+    from services.gophish_client import get_results
+    from framework.awareness import generate_awareness_report
+    return generate_awareness_report(get_results(), lang=lang)
+
+
 @router.post("/emails/{email_id}/release")
 def release_email(email_id: int, _auth: dict = Depends(require_role("analyst"))):
     """Releases an email from quarantine."""
