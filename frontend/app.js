@@ -457,6 +457,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
+                <div class="glass-card rounded-xl p-5 mb-8 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                        <h3 class="text-lg font-semibold text-white"><i class="fa-solid fa-file-pdf mr-2 text-cyber-warning"></i> AI Awareness Report</h3>
+                        <p class="text-xs text-gray-500 mt-1">The local LLM analyses which departments are most at risk and what training to run — exported as PDF.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <select id="awareness-lang" class="cyber-input p-2 rounded-lg text-sm">
+                            <option value="uz" selected>O'zbek</option>
+                            <option value="ru">Русский</option>
+                            <option value="en">English</option>
+                        </select>
+                        <button id="download-awareness-btn" class="py-2 px-4 bg-cyber-warning/10 border border-cyber-warning text-cyber-warning hover:bg-cyber-warning/20 rounded-lg text-sm font-medium whitespace-nowrap"><i class="fa-solid fa-download mr-1"></i> Awareness PDF</button>
+                    </div>
+                </div>
+
                 <div class="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-8">
                     <div class="glass-card rounded-xl p-6">
                         <h3 class="text-lg font-semibold text-white mb-4">Department Vulnerability</h3>
@@ -2769,6 +2784,35 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error(error);
             showCustomAlert("Could not generate PDF report. Check backend.", "Export Error", true);
+        } finally {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    });
+
+    // AI security-awareness report (per-department conclusion + training recommendations).
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('#download-awareness-btn');
+        if (!btn) return;
+        const lang = (document.getElementById('awareness-lang') || {}).value || 'uz';
+        const originalText = btn.innerHTML;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> Analysing…';
+        btn.disabled = true;
+        try {
+            const res = await apiFetch(`${API_BASE}/simulations/report/pdf?lang=${encodeURIComponent(lang)}`);
+            if (!res.ok) throw new Error("Failed to generate awareness PDF");
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `ThreatEye_Awareness_${lang}_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        } catch (error) {
+            console.error(error);
+            showCustomAlert("Could not generate the awareness report. Check backend/LLM.", "Export Error", true);
         } finally {
             btn.innerHTML = originalText;
             btn.disabled = false;
