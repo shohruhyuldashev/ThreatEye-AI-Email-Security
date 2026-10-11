@@ -4,6 +4,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+# The gophish client pins an old, vulnerable dependency stack; install it without
+# those pins so it runs on the modern requests/dateutil above (it only needs those).
+RUN pip install --no-cache-dir --no-deps gophish==0.5.1
 
 # Copy the rest of the backend files
 COPY . .

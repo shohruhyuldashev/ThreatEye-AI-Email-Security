@@ -2,9 +2,13 @@
 # Bump deliberately; re-run the security scanners after any change.
 fastapi==0.143.0
 uvicorn==0.54.0
-gophish==0.5.1
+# gophish (the PyPI client) hard-pins an old, CVE-laden stack (requests 2.24.0,
+# urllib3 1.25.10, certifi 2020, ...). It only really needs requests + dateutil at
+# runtime, so it is installed with --no-deps in the Dockerfile and runs on the
+# modern versions pinned here instead.
 openai==3.29.0
 python-dotenv==1.2.4
+python-dateutil==2.9.0.post0
 pydantic==2.14.0
 requests==2.34.2
 APScheduler==3.11.3
