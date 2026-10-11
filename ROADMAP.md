@@ -150,7 +150,7 @@ what blocks real use first.
 - Session hardening: device binding, revoke-all, suspicious-login alerts.
 
 **Detection & AI/ML** (see §5)
-- Train the CPU ML classifier on the 1M dataset; wire as a third detection layer.
+- [x] CPU ML classifier trained on the 1M dataset and wired as a third detection layer (`scripts/train_ml_classifier.py` → `services/ml_classifier.py`, HashingVectorizer + SGD log-loss, raise-only/fail-open).
 - GPU LoRA fine-tune of the base model on real labeled mail; eval-gated promotion.
 - Continuous evaluation harness + drift/regression dashboard; per-tenant model tuning.
 - Real-mail validation of auto-quarantine with a human-in-the-loop shadow mode first.
@@ -185,7 +185,8 @@ gradient fine-tuning — which is why it runs on CPU. Paths to make the AI stron
 
 1. **CPU ML classifier (near-term, no GPU).** Train a TF-IDF + logistic-regression / gradient-
    boosting classifier on the 1M labeled dataset (minutes on CPU). Real training on real text;
-   adds an independent signal to the deterministic + LLM layers. *Designed, deferred by choice.*
+   adds an independent signal to the deterministic + LLM layers. **DONE** — HashingVectorizer +
+   SGD(log-loss) in `services/ml_classifier.py`; model trained by `scripts/train_ml_classifier.py`.
 2. **GPU LoRA fine-tune (mid-term).** Fine-tune the base (qwen2.5:7b or larger) on real labeled
    mail with LoRA on a GPU; import the merged GGUF into Ollama. Gate promotion on the eval
    harness. Needs a GPU box or cloud (Colab/A100).

@@ -471,6 +471,17 @@ def _auth_floor(a_score: int, has_url: bool, solicits: bool, suspicious_tld: boo
     return floor
 
 
+def _ml_layer(email_text: str, metadata: dict | None, urls: list) -> tuple[int, bool]:
+    """CPU ML phishing probability (0-100), or (0, False) if the model is absent."""
+    try:
+        from services.ml_classifier import score_email
+        md = dict(metadata or {})
+        md.setdefault("urls", urls)
+        return score_email(email_text, md)
+    except Exception:
+        return 0, False
+
+
 def deterministic_score(email_text: str, metadata: dict | None = None) -> dict:
     """
     The no-LLM verdict: heuristics + authentication + corpus + BEC + prompt-injection,
@@ -514,12 +525,18 @@ def deterministic_score(email_text: str, metadata: dict | None = None) -> dict:
     themed = _themed_domain_score(metadata.get("sender", ""), urls)
     if themed >= 78 and _solicitation(email_text):
         score = max(score, 80)
+    # Independent, language-agnostic ML signal (trained on 1M real phishing/benign).
+    # Fail-open and raise-only: it never lowers the score and is skipped if absent.
+    ml_prob, ml_ok = _ml_layer(email_text, metadata, urls)
+    if ml_ok and ml_prob >= 75:
+        score = max(score, ml_prob)
     score = max(0, min(100, score))
     return {
         "score": score,
         "is_threat": score >= 70,
         "corpus_match": bool(corpus_hit.get("matches") or corpus_hit.get("high_value")),
         "a_score": a_score, "h_score": h_score, "corpus_score": corpus_score,
+        "ml_score": ml_prob if ml_ok else None,
     }
 
 
@@ -719,6 +736,11 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
         final_score = max(final_score, 60)
         if d_score >= 50 or h_score >= 40:
             final_score = max(final_score, 85)
+
+    # Independent CPU ML signal (language-agnostic, raise-only, fail-open).
+    ml_prob, ml_ok = _ml_layer(email_text, metadata, urls)
+    if ml_ok and ml_prob >= 75:
+        final_score = max(final_score, ml_prob)
 
     final_score = min(final_score, 100)
 

@@ -18,6 +18,9 @@ Core pieces:
 - **Deterministic detection stack** — heuristics, SPF/DKIM/DMARC authentication, domain
   intel/typosquat, BEC signals, prompt-injection guard, and a corpus matcher — so
   detection holds when the LLM is slow or offline.
+- **CPU ML classifier** — a HashingVectorizer + SGD (log-loss) model trained on the 1M
+  labeled dataset (`scripts/train_ml_classifier.py`), an independent, language-agnostic
+  statistical signal that runs on CPU and can only raise the risk score (fail-open).
 - **Real-time analysis** on two entry points: async IMAP monitoring and a machine
   ingestion API, streamed to the dashboard over SSE.
 - **AI-driven GoPhish simulations** — the model writes the lure *and* the credential-capture
