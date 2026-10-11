@@ -99,6 +99,15 @@ def seed_saas_defaults() -> None:
                 )
             else:
                 logger.info("Seeded 'admin' owner user from configured password.")
+
+        # Also catch an EXISTING deployment still on the shipped admin/admin: if any
+        # user's password still verifies against 'admin', force a change on them too.
+        from framework.security import verify_password
+        cur.execute("SELECT id, password_hash, must_change_password FROM users")
+        for uid, pw_hash, mcp in cur.fetchall():
+            if not mcp and pw_hash and verify_password("admin", pw_hash):
+                cur.execute("UPDATE users SET must_change_password = TRUE WHERE id = %s", (uid,))
+                logger.warning("User id=%s still uses the default password 'admin' — forcing a change.", uid)
         conn.commit()
     finally:
         conn.close()
