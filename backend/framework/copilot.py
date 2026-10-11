@@ -15,7 +15,13 @@ from typing import Any
 from db import get_db_connection
 from framework.model_provider import get_llm_client, get_model_name
 
-_TOKEN = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|[A-Za-z0-9-]+\.[A-Za-z]{2,}")
+# Domain part is a sequence of dot-delimited labels (each label has no "."), so
+# every quantifier iteration must start with a literal ".". There is no overlap
+# between iterations, which keeps matching linear (no polynomial backtracking).
+_TOKEN = re.compile(
+    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+    r"|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
+)
 _STOP = {"the", "and", "from", "with", "show", "list", "what", "which", "email", "emails",
          "this", "that", "have", "were", "past", "last", "week", "today", "give", "find", "any"}
 

@@ -212,7 +212,7 @@ def launch_campaign(targets: list, email_data: dict, campaign_name: str, cfg: di
         }
     except Exception as e:
         logger.error(f"Campaign launch failed: {e}")
-        return {"error": str(e)}
+        return {"error": "Campaign launch failed; see server logs."}
 
 
 def get_results() -> dict:
@@ -229,7 +229,7 @@ def get_results() -> dict:
         campaigns = client.campaigns.get()
     except Exception as e:
         logger.error(f"Failed to fetch campaigns: {e}")
-        return {"campaigns": [], "departments": [], "employees": [], "error": str(e)}
+        return {"campaigns": [], "departments": [], "employees": [], "error": "Failed to fetch campaigns from GoPhish; see server logs."}
 
     dept: dict[str, dict] = {}
     employees = []

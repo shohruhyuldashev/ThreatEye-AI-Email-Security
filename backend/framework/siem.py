@@ -106,7 +106,8 @@ def send_to_siem(event_type: str, payload: dict[str, Any], cfg: dict[str, str] |
             "destination": cfg["webhook_url"],
         }
     except Exception as exc:
-        return {"status": "failed", "response_code": None, "error": str(exc), "destination": cfg["webhook_url"]}
+        logger.warning("SIEM POST failed: %s", exc)
+        return {"status": "failed", "response_code": None, "error": "delivery failed (see server logs)", "destination": cfg["webhook_url"]}
 
 
 def _deliver_with_retry(event_type: str, payload: dict[str, Any]) -> None:
