@@ -15,13 +15,6 @@ from typing import Any
 from db import get_db_connection
 from framework.model_provider import get_llm_client, get_model_name
 
-# Domain part is a sequence of dot-delimited labels (each label has no "."), so
-# every quantifier iteration must start with a literal ".". There is no overlap
-# between iterations, which keeps matching linear (no polynomial backtracking).
-_TOKEN = re.compile(
-    r"[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
-    r"|[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+"
-)
 _STOP = {"the", "and", "from", "with", "show", "list", "what", "which", "email", "emails",
          "this", "that", "have", "were", "past", "last", "week", "today", "give", "find", "any"}
 
@@ -104,13 +97,22 @@ def investigate_email(organization_id: int, email_id: int) -> dict[str, Any]:
 
 # --------------------------------------------------------------------------- ask
 def _search_term(question: str) -> str | None:
-    # Bound the input before any regex: the token pattern has super-linear
-    # backtracking on adversarial input, so a long copilot question must not be
-    # able to stall the worker (polynomial ReDoS).
+    # No backtracking regex here: scan whitespace-separated words with plain
+    # string ops to find an email/domain-like token. This is strictly linear, so
+    # a long adversarial copilot question can never stall the worker (no ReDoS).
     q = (question or "")[:500]
-    m = _TOKEN.search(q)
-    if m:
-        return m.group(0).lower()
+    for raw in q.split():
+        w = raw.strip(".,;:!?()[]{}<>\"'").lower()
+        if not w:
+            continue
+        if "@" in w:
+            domain = w.rsplit("@", 1)[-1]
+            if "." in domain and domain.rsplit(".", 1)[-1].isalpha():
+                return w  # email-like
+        elif "." in w:
+            head, _, tld = w.rpartition(".")
+            if head and len(tld) >= 2 and tld.isalpha():
+                return w  # domain-like
     words = [w.lower() for w in re.findall(r"[A-Za-z]{4,}", q) if w.lower() not in _STOP]
     return words[0] if words else None
 

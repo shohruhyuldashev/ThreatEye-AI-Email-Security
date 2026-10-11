@@ -159,7 +159,7 @@ def replay_failed(limit: int = 50) -> dict[str, Any]:
         rows = c.fetchall()
     except Exception as e:
         logger.error("SIEM replay query failed: %s", e)
-        return {"replayed": 0, "error": str(e)}
+        return {"replayed": 0, "error": "replay query failed (see server logs)"}
 
     replayed, skipped = 0, 0
     for row in rows:
@@ -192,4 +192,4 @@ def export_siem_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any
     except Exception as e:
         # Never let SIEM forwarding break ingestion.
         logger.error("SIEM dispatch failed: %s", e)
-        return {"status": "failed", "error": str(e)}
+        return {"status": "failed", "error": "dispatch failed (see server logs)"}
