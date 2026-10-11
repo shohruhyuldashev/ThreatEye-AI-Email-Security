@@ -38,6 +38,13 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         response.headers.setdefault(
             "Cache-Control", "no-store" if request.url.path.startswith("/api") else "no-cache"
         )
+        # HSTS only when the request actually arrived over TLS (directly or via a
+        # terminating proxy like Caddy), so it never pins an http-only lab to https.
+        forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+        if request.url.scheme == "https" or forwarded_proto == "https":
+            response.headers.setdefault(
+                "Strict-Transport-Security", "max-age=63072000; includeSubDomains"
+            )
         return response
 
 

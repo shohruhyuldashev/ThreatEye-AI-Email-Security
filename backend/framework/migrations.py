@@ -75,20 +75,30 @@ def seed_saas_defaults() -> None:
             cur.execute("SELECT value FROM settings WHERE key = 'admin_password'")
             row = cur.fetchone()
             saved = row[0] if row and row[0] else None
+            # Force a first-login password change only when we fall back to the
+            # shipped 'admin' default — a migrated/operator-set password is trusted.
+            force_change = False
             if saved and saved.startswith("pbkdf2_sha256$"):
                 pw_hash = saved
             elif saved:
                 pw_hash = hash_password(saved)
             else:
                 pw_hash = hash_password("admin")
+                force_change = True
 
             cur.execute(
-                "INSERT INTO users (organization_id, username, email, full_name, password_hash, role) "
-                "VALUES (1, 'admin', 'admin@threateye.local', 'Administrator', %s, 'owner') "
+                "INSERT INTO users (organization_id, username, email, full_name, password_hash, role, must_change_password) "
+                "VALUES (1, 'admin', 'admin@threateye.local', 'Administrator', %s, 'owner', %s) "
                 "ON CONFLICT (username) DO NOTHING",
-                (pw_hash,),
+                (pw_hash, force_change),
             )
-            logger.info("Seeded default 'admin' owner user.")
+            if force_change:
+                logger.warning(
+                    "Seeded default 'admin' owner with password 'admin' — a password "
+                    "change is REQUIRED on first login before anything else works."
+                )
+            else:
+                logger.info("Seeded 'admin' owner user from configured password.")
         conn.commit()
     finally:
         conn.close()

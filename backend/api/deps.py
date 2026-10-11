@@ -29,9 +29,26 @@ def require_auth(
     if not raw_token:
         raise HTTPException(status_code=401, detail="Authentication required")
     try:
-        return decode_token(raw_token, expected_type="access")
+        payload = decode_token(raw_token, expected_type="access")
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired authentication token")
+
+    # A user flagged must-change-password holds a valid session but may only reach
+    # the endpoints needed to change it (and to see who they are / sign out). Every
+    # other call is blocked until the password is rotated.
+    if payload.get("mcp"):
+        allowed = {
+            "/api/auth/change-password",
+            "/api/auth/logout",
+            "/api/auth/me",
+            "/api/auth/refresh",
+        }
+        if request.url.path.rstrip("/") not in allowed:
+            raise HTTPException(
+                status_code=403,
+                detail="Password change required before continuing. Set a new password first.",
+            )
+    return payload
 
 
 def require_role(minimum: str):

@@ -59,7 +59,8 @@ docker compose up --build     # core stack
 - **Dashboard:** http://localhost:3000
 - **Backend API:** http://localhost:8000  (health: `/health`, ready: `/ready`, metrics: `/metrics`)
 
-Default login is `admin` / `admin` — **change it immediately** in Settings on first run.
+First login is `admin` / `admin` — the server **forces a password change before anything
+else works** (every other endpoint returns 403 until you set a new password).
 
 **Optional profiles:**
 

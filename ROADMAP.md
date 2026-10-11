@@ -51,7 +51,8 @@ what blocks real use first.
 - **Secrets stored in plaintext in the DB.** SIEM/AI/GoPhish/M365/Google credentials are
   masked in the API but not encrypted at rest. Needs envelope encryption (KMS/Vault/Fernet).
 - **Dev conveniences shipped on.** `--reload` in the backend Dockerfile (single worker),
-  `COOKIE_SECURE=false`, `admin/admin` default, no TLS by default (Caddy is an optional profile).
+  `COOKIE_SECURE=false`, no TLS by default (Caddy is an optional profile). The `admin/admin`
+  default is now forced to change on first login.
 - **No per-tenant rate limit / quota** on the ingestion API (`POST /v1/emails`) — only login
   is rate-limited.
 
@@ -100,8 +101,8 @@ what blocks real use first.
 ### Phase 0 — Production hardening (unlocks a single-org pilot) — ~2–4 weeks
 - [x] Remove `--reload`; run Uvicorn/Gunicorn with multiple workers behind the Caddy/nginx TLS proxy.
 - [x] Force non-default secrets on boot (`THREATEYE_AUTH_SECRET`, DB password); fail closed if defaults.
-- [ ] Force an admin-password change on first login; drop `admin/admin`.
-- [ ] `COOKIE_SECURE=true` + TLS as the default deployment path; HSTS.
+- [x] Force an admin-password change on first login; drop `admin/admin` — `must_change_password` flag seeded TRUE on the default admin, `mcp` JWT claim, `require_auth` blocks every non-auth endpoint (403) until rotated.
+- [x] `COOKIE_SECURE=true` + TLS as the default deployment path; HSTS — backend emits HSTS behind TLS (Caddy already did); `THREATEYE_ENV=production` fails closed when `COOKIE_SECURE!=true`.
 - [x] Encrypt settings secrets at rest (Fernet/KMS); key management documented.
 - [x] Egress allow-list for `test-imap`/`test-siem`/AI base-URL/integrations webhooks (kill the open SSRF) — `framework/egress.py`, blocks private/loopback/link-local/reserved + metadata IP, allow-lists bundled service names; `EGRESS_*` env.
 - [ ] Backups + restore runbook for Postgres; metrics alerting.

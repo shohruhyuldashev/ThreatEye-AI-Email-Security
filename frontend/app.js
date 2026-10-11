@@ -91,8 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     body: JSON.stringify({ username: user, password: pass })
                 });
                 if (res.ok) {
-                    csrfToken = (await res.json()).csrf_token || '';
+                    const data = await res.json();
+                    csrfToken = data.csrf_token || '';
                     loginError.classList.add('hidden');
+                    if (data.must_change_password) {
+                        const ok = await forcePasswordChange(pass);
+                        if (!ok) { return; }  // stay on the login screen until done
+                    }
                     showApp(true);
                     initializeApp();
                 } else {
@@ -102,6 +107,46 @@ document.addEventListener('DOMContentLoaded', () => {
                 loginError.classList.remove('hidden');
             }
         });
+    }
+
+    // Forced first-login password change: the server holds the session but blocks
+    // every non-auth call until the shipped admin/admin default is replaced. Prompt
+    // until a valid new password is set, then let the app load.
+    async function forcePasswordChange(currentPass) {
+        while (true) {
+            const newPass = window.prompt(
+                "A password change is required before you can continue.\n\n" +
+                "Enter a new password (at least 8 characters, different from the current one):"
+            );
+            if (newPass === null) { return false; }  // cancelled → back to login
+            if (newPass.length < 8) {
+                window.alert("Password must be at least 8 characters.");
+                continue;
+            }
+            const confirmPass = window.prompt("Re-enter the new password to confirm:");
+            if (confirmPass === null) { return false; }
+            if (newPass !== confirmPass) {
+                window.alert("Passwords did not match. Try again.");
+                continue;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/auth/change-password`, {
+                    method: 'POST',
+                    credentials: 'include',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
+                    body: JSON.stringify({ current_password: currentPass, new_password: newPass })
+                });
+                if (res.ok) {
+                    csrfToken = (await res.json()).csrf_token || csrfToken;
+                    window.alert("Password updated. Signing you in…");
+                    return true;
+                }
+                const data = await res.json().catch(() => ({}));
+                window.alert(data.detail || "Could not update the password. Try again.");
+            } catch (e) {
+                window.alert("Network error while changing the password. Try again.");
+            }
+        }
     }
 
     // Define the HTML content for each view

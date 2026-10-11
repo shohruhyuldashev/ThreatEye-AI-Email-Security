@@ -133,6 +133,7 @@ def _claims(identity: dict, token_type: str, ttl: int) -> dict:
         "uid": identity.get("id"),
         "org": identity.get("organization_id", 1),
         "role": identity.get("role", DEFAULT_ROLE),
+        "mcp": bool(identity.get("must_change_password", False)),
         "type": token_type,
         "iat": now,
         "exp": now + ttl,

@@ -846,7 +846,7 @@ def login(req: LoginRequest, response: Response, request: Request = None):
     conn = get_db_connection()
     c = conn.cursor()
     c.execute(
-        "SELECT id, organization_id, username, password_hash, role, active "
+        "SELECT id, organization_id, username, password_hash, role, active, must_change_password "
         "FROM users WHERE LOWER(username) = LOWER(?)",
         (req.username.strip(),),
     )
@@ -873,6 +873,7 @@ def login(req: LoginRequest, response: Response, request: Request = None):
     return {
         "message": "Login successful",
         "csrf_token": csrf,
+        "must_change_password": bool(user["must_change_password"]),
         "user": {"username": user["username"], "role": user["role"], "organization_id": user["organization_id"]},
     }
 
@@ -896,13 +897,14 @@ def refresh_session(request: Request, response: Response):
     # Re-read the user so role/active changes take effect on refresh.
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT id, organization_id, username, role, active FROM users WHERE id = ?", (payload.get("uid"),))
+    c.execute("SELECT id, organization_id, username, role, active, must_change_password FROM users WHERE id = ?", (payload.get("uid"),))
     user = c.fetchone()
     conn.close()
     if not user or not user["active"]:
         raise HTTPException(status_code=401, detail="Account inactive")
     csrf = set_auth_cookies(response, dict(user))
     return {"message": "refreshed", "csrf_token": csrf,
+            "must_change_password": bool(user["must_change_password"]),
             "user": {"username": user["username"], "role": user["role"], "organization_id": user["organization_id"]}}
 
 @router.post("/auth/logout")
@@ -929,11 +931,11 @@ def whoami(_auth: dict = Depends(require_auth)):
     }
 
 @router.post("/auth/change-password")
-def change_password(req: ChangePasswordRequest, _auth: dict = Depends(require_auth)):
+def change_password(req: ChangePasswordRequest, response: Response, _auth: dict = Depends(require_auth)):
     user_id = _auth.get("uid")
     conn = get_db_connection()
     c = conn.cursor()
-    c.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,))
+    c.execute("SELECT id, organization_id, username, role, password_hash FROM users WHERE id = ?", (user_id,))
     row = c.fetchone()
     if not row or not verify_password(req.current_password, row["password_hash"]):
         conn.close()
@@ -941,14 +943,27 @@ def change_password(req: ChangePasswordRequest, _auth: dict = Depends(require_au
     if len(req.new_password) < 8:
         conn.close()
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
-    c.execute("UPDATE users SET password_hash = ? WHERE id = ?", (hash_password(req.new_password), user_id))
+    if req.new_password == req.current_password:
+        conn.close()
+        raise HTTPException(status_code=400, detail="New password must differ from the current one")
+    # Clear the must-change flag in the same statement so a forced-change user is
+    # unblocked atomically.
+    c.execute(
+        "UPDATE users SET password_hash = ?, must_change_password = FALSE WHERE id = ?",
+        (hash_password(req.new_password), user_id),
+    )
     c.execute('''
         INSERT INTO audit_log (actor, action, target_type, target_id, details)
         VALUES (?, 'password_changed', 'user', ?, 'Self-service password change')
     ''', (_auth.get("sub", "user"), str(user_id)))
     conn.commit()
     conn.close()
-    return {"message": "Password updated successfully"}
+    # Reissue the session with mcp=False so the user isn't blocked until the old
+    # 15-minute access token expires.
+    identity = {k: row[k] for k in ("id", "organization_id", "username", "role")}
+    identity["must_change_password"] = False
+    csrf = set_auth_cookies(response, identity)
+    return {"message": "Password updated successfully", "csrf_token": csrf}
 
 # ------------------------------- User management --------------------------------
 @router.get("/users")
