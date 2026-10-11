@@ -16,7 +16,7 @@ psycopg2-binary
 pyyaml
 oletools
 redis
-pyjwt
+pyjwt>=2.15.1
 google-api-python-client
 google-auth
 pytest
