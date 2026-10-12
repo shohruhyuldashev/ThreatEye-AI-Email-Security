@@ -19,6 +19,46 @@ SUSPICIOUS_TLDS = [
 ]
 SHORTENERS = ['bit.ly', 't.co', 'tinyurl.com', 'goo.gl', 'ow.ly', 'is.gd', 'buff.ly', 'rebrand.ly', 'cutt.ly', 't.ly']
 URGENCY_KEYWORDS = ['urgent', 'immediately', 'password reset', 'invoice overdue', 'action required', 'account suspended']
+
+# --- Advanced-evasion helpers ---------------------------------------------------
+# Confusable (homoglyph) map: Unicode lookalikes → their ASCII letter. Covers the
+# Cyrillic/Greek characters attackers drop into domains and words to dodge string
+# matching (e.g. "mediа-tecth.com" with Cyrillic U+0430 "а").
+CONFUSABLES = {
+    # Cyrillic → Latin
+    'а': 'a', 'е': 'e', 'о': 'o', 'р': 'p', 'с': 'c', 'х': 'x', 'у': 'y', 'к': 'k',
+    'м': 'm', 'т': 't', 'н': 'h', 'в': 'b', 'і': 'i', 'ѕ': 's', 'ј': 'j', 'ԁ': 'd',
+    'ɡ': 'g', 'ո': 'n',
+    # Greek → Latin
+    'α': 'a', 'ε': 'e', 'ο': 'o', 'ρ': 'p', 'ν': 'v', 'μ': 'u', 'τ': 't', 'ι': 'i',
+    'κ': 'k', 'χ': 'x',
+    # digit/letter swaps
+    '0': 'o', '1': 'l', '3': 'e', '5': 's', '$': 's',
+}
+# Zero-width / invisible characters used to break tokenizers and hide keywords.
+_HIDDEN_CHARS = '​‌‍‎‏﻿⁠­᠎'
+_HIDDEN_RE = re.compile('[' + re.escape(_HIDDEN_CHARS) + ']')
+
+
+def normalize_confusables(s: str) -> str:
+    """Fold Unicode lookalikes to ASCII so homoglyph domains/words match."""
+    return ''.join(CONFUSABLES.get(ch, ch) for ch in (s or '').lower())
+
+
+def strip_hidden_chars(text: str) -> str:
+    """Remove zero-width/invisible characters (so "v​erify" reads as "verify")."""
+    return _HIDDEN_RE.sub('', text or '')
+
+
+def count_hidden_chars(text: str) -> int:
+    return len(_HIDDEN_RE.findall(text or ''))
+
+
+def has_non_ascii_domain(domain: str) -> bool:
+    """True for raw non-ASCII (IDN) or punycode (xn--) domains — a strong phishing
+    signal when impersonating English brands."""
+    d = (domain or '')
+    return any(ord(ch) > 127 for ch in d) or 'xn--' in d.lower()
 # Brands impersonated in real credential-phishing campaigns. Microsoft 365 /
 # Outlook lures dominate, so the list has to cover the product names an attacker
 # actually registers ("0ffice365-reset.com"), not just the company name.
@@ -71,10 +111,21 @@ def layer1_heuristics(text: str, urls: list) -> tuple:
         "raw_ip_url": False,
         "shortened_url": False,
         "suspicious_tld": False,
-        "base64_obfuscation": False
+        "base64_obfuscation": False,
+        "hidden_chars": False,
     }
 
-    text_lower = text.lower()
+    # Zero-width / invisible characters inside the body (e.g. "v<zwsp>erify") and
+    # invisible keyword-stuffing (font-size:0 / white-on-white text) are deliberate
+    # filter-evasion with no legitimate use. Strip them so keyword matching still
+    # works on the real words, and flag their presence.
+    if count_hidden_chars(text) >= 2 or re.search(r'font-size\s*:\s*0', text, re.I) or \
+       re.search(r'color\s*:\s*#?f{3,6}\b', text, re.I):
+        features["hidden_chars"] = True
+        score += 25
+    clean = strip_hidden_chars(text)
+
+    text_lower = clean.lower()
     for kw in URGENCY_KEYWORDS:
         if kw in text_lower:
             features["urgency_score"] += 2
@@ -86,6 +137,19 @@ def layer1_heuristics(text: str, urls: list) -> tuple:
     if re.search(r'(?<![A-Za-z0-9+/])(?:[A-Za-z0-9+/]{4}){16,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?(?![A-Za-z0-9+/])', text):
         features["base64_obfuscation"] = True
         score += 20
+
+    # Anchor-text vs href mismatch: a link whose visible text names one domain but
+    # whose href points at another is a classic phishing disguise.
+    for m in re.finditer(r'<a\b[^>]*href\s*=\s*["\']([^"\']+)["\'][^>]*>(.*?)</a>', text, re.I | re.S):
+        href, shown = m.group(1), re.sub(r'<[^>]+>', '', m.group(2))
+        href_dom = tld_extract(href)
+        shown_m = re.search(r'([A-Za-z0-9-]+\.)+[A-Za-z]{2,}', shown)
+        if href_dom.domain and shown_m:
+            shown_dom = tld_extract(shown_m.group(0))
+            if shown_dom.domain and (shown_dom.domain, shown_dom.suffix) != (href_dom.domain, href_dom.suffix):
+                features["anchor_href_mismatch"] = True
+                score += 35
+                break
 
     for url in urls:
         ext = tld_extract(url)
@@ -226,12 +290,25 @@ def layer3_domain_intel(urls: list) -> tuple:
             domain_to_check = f"{domain_name}.{suffix}"
             
         features["domain_name"] = domain_to_check
-        
+
+        # 2b. Non-ASCII / punycode (IDN homoglyph) domain — e.g. "mediа-tecth.com"
+        # with a Cyrillic "а", or its xn-- punycode form. Legit English-brand mail
+        # never does this, so it is a strong, decisive phishing signal on its own.
+        full_host = f"{subdomain}.{domain_name}.{suffix}" if subdomain else domain_to_check
+        if has_non_ascii_domain(full_host) or has_non_ascii_domain(target_url.split('//')[-1].split('/')[0]):
+            features["non_ascii_domain"] = True
+            score += 70
+
+        # Fold confusable lookalikes to ASCII so a homoglyph domain still matches a
+        # brand (e.g. Cyrillic "а" in a fake "paypаl").
+        domain_name_norm = normalize_confusables(domain_name)
+
         # 3. Domain Similarity Detector (Typosquatting) (Max 50%)
         is_exact_match = False
-        domain_parts = re.split(r'[-]', domain_name)
+        domain_parts = re.split(r'[-]', domain_name) + (
+            re.split(r'[-]', domain_name_norm) if domain_name_norm != domain_name else [])
         subdomain_parts = re.split(r'[-.]', subdomain)
-        
+
         ts_score = 0
         for brand in MAJOR_BRANDS:
             if domain_name == brand:
@@ -738,6 +815,17 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
     # diluted by the weighted average to a "safe" ~16%.
     if d_features.get("typosquatting_target") and d_score >= 70:
         final_score = max(final_score, max(d_score, 80))
+
+    # A non-ASCII / punycode (IDN homoglyph) domain is decisive on its own — this
+    # catches the Cyrillic-lookalike domains that DKIM/SPF can pass (real SES) and
+    # that evade plain string matching.
+    if d_features.get("non_ascii_domain"):
+        final_score = max(final_score, 85)
+
+    # Hidden zero-width characters or invisible keyword-stuffing in the body is a
+    # deliberate evasion with no legitimate use — raise the floor.
+    if h_features.get("hidden_chars"):
+        final_score = max(final_score, 75)
 
     # --- Decisive-signal floors -------------------------------------------------
     # The weighted average above is designed to blend weak signals, but it also
