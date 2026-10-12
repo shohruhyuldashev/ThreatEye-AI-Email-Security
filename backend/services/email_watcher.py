@@ -91,20 +91,28 @@ def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
                     try:
                         c = conn.cursor()
                         for msg in mailbox.fetch(A(seen=False)):
-                            # Never analyse/quarantine our OWN phishing-simulation mail.
-                            # Two independent, attacker-invisible checks:
-                            #  1) the server-side registry (no marker in the email at all), and
-                            #  2) a signed token under a SECRET, per-deployment header name.
-                            # An attacker cannot discover either or forge a match.
-                            _recipient = msg.to[0] if msg.to else "unknown"
-                            _body = msg.text or msg.html or ""
-                            from framework.sim_registry import is_simulation
+                            # Skip ONLY our own phishing-simulation mail, and ONLY when it
+                            # carries a VALID signed token under the secret, per-deployment
+                            # header name. The cryptographic proof is REQUIRED: without a
+                            # valid header the email is always analysed — so an attacker who
+                            # merely guesses an active campaign's subject cannot bypass the
+                            # detector. (The server-side registry additionally confirms the
+                            # send, but is never sufficient on its own to skip.)
                             from framework.security import verify_sim_token, sim_header_name
                             _hdrs = getattr(msg, "headers", {}) or {}
                             _sig = _header_first(_hdrs, sim_header_name().lower())
-                            if is_simulation(_recipient, msg.subject, _body) or verify_sim_token(_sig):
-                                logger.info(f"Simulation email (registry/signed) — leaving in inbox, skipping detection: {msg.subject}")
-                                continue
+                            if _sig and verify_sim_token(_sig):
+                                try:
+                                    from framework.sim_registry import is_simulation
+                                    _registered = is_simulation(
+                                        msg.to[0] if msg.to else "unknown", msg.subject,
+                                        msg.text or msg.html or "")
+                                except Exception:
+                                    _registered = True  # registry optional; header already proved it
+                                if _registered:
+                                    logger.info(f"Verified simulation (signed header + registry) — skipping detection: {msg.subject}")
+                                    continue
+                                logger.warning(f"Valid sim header but no registry match — analysing anyway: {msg.subject}")
                             logger.info(f"Analyzing new email: {msg.subject} from {msg.from_}")
                             content_to_analyze = f"Subject: {msg.subject}\nBody: {msg.text or msg.html}"
                             
