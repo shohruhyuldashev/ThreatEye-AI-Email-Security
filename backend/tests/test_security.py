@@ -58,3 +58,13 @@ def test_sim_token_expires():
     old = f"sim.{int(time.time()) - 999999}"
     sig = hmac.new(s.AUTH_SECRET.encode(), old.encode(), hashlib.sha256).hexdigest()
     assert not s.verify_sim_token(f"{old}.{sig}", max_age=3600)   # correctly signed but too old
+
+
+def test_sim_header_name_is_secret_and_leakless():
+    name = s.sim_header_name()
+    assert name.startswith("X-")
+    # Must not reveal its purpose.
+    low = name.lower()
+    assert "sim" not in low and "threateye" not in low and "phish" not in low
+    # Deterministic for a given secret, so both sides agree.
+    assert s.sim_header_name() == name

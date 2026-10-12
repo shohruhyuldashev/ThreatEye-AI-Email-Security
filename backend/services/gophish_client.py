@@ -137,7 +137,6 @@ def _bare_email(value: str) -> str:
     return m.group(0).strip() if m else "it-security@example.com"
 
 
-SIM_HEADER_KEY = "X-ThreatEye-Sim"
 
 
 def ensure_sending_profile(client, cfg: dict):
@@ -158,16 +157,18 @@ def ensure_sending_profile(client, cfg: dict):
     smtp.interface_type = "SMTP"
     smtp.ignore_cert_errors = True
 
-    # Stamp a FRESH signed simulation token on every (re)configure so the marker
-    # stays within its expiry window. An attacker cannot forge this without the
-    # server secret, so it can't be used to bypass detection.
-    from framework.security import make_sim_token
+    # Hidden second layer: stamp a FRESH signed token under a SECRET, per-deployment
+    # header name (derived from the server secret). The primary mechanism is the
+    # server-side registry (no email marker at all); this header leaks nothing about
+    # its purpose and cannot be forged without the secret.
+    from framework.security import make_sim_token, sim_header_name
+    hdr_name = sim_header_name()
 
     def _key(h):
         return h.get("key") if isinstance(h, dict) else getattr(h, "key", "")
 
-    hdrs = [h for h in (getattr(smtp, "headers", None) or []) if _key(h) != SIM_HEADER_KEY]
-    hdrs.append({"key": SIM_HEADER_KEY, "value": make_sim_token()})
+    hdrs = [h for h in (getattr(smtp, "headers", None) or []) if _key(h) != hdr_name]
+    hdrs.append({"key": hdr_name, "value": make_sim_token()})
     smtp.headers = hdrs
     if existing:
         try:
@@ -269,6 +270,19 @@ def launch_campaign(targets: list, email_data: dict, campaign_name: str, cfg: di
             url=cfg["phish_url"],
         )
         campaign = client.campaigns.post(campaign)
+
+        # Record each target in the server-side simulation registry so the watcher
+        # recognises this mail without any attacker-visible marker in the email.
+        try:
+            from framework.sim_registry import register_simulation
+            from_addr = _bare_email(cfg.get("smtp_from", "")) if cfg else ""
+            subj = email_data.get("subject", "")
+            body = email_data.get("body_html") or email_data.get("body_text") or ""
+            for t in targets:
+                register_simulation(1, t.get("email", ""), from_addr, subj, body)
+        except Exception as e:
+            logger.warning("Could not register simulation targets: %s", e)
+
         return {
             "status": "success",
             "campaign_id": campaign.id,

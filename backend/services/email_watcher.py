@@ -92,13 +92,18 @@ def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
                         c = conn.cursor()
                         for msg in mailbox.fetch(A(seen=False)):
                             # Never analyse/quarantine our OWN phishing-simulation mail.
-                            # GoPhish stamps X-ThreatEye-Sim with an HMAC-signed, expiring
-                            # token; we VERIFY the signature so a forged header can't be
-                            # used to bypass detection. It must reach the employee and must
-                            # not count as a real threat.
-                            from framework.security import verify_sim_token
-                            if verify_sim_token(_header_first(getattr(msg, "headers", {}) or {}, "x-threateye-sim")):
-                                logger.info(f"Verified simulation email — leaving in inbox, skipping detection: {msg.subject}")
+                            # Two independent, attacker-invisible checks:
+                            #  1) the server-side registry (no marker in the email at all), and
+                            #  2) a signed token under a SECRET, per-deployment header name.
+                            # An attacker cannot discover either or forge a match.
+                            _recipient = msg.to[0] if msg.to else "unknown"
+                            _body = msg.text or msg.html or ""
+                            from framework.sim_registry import is_simulation
+                            from framework.security import verify_sim_token, sim_header_name
+                            _hdrs = getattr(msg, "headers", {}) or {}
+                            _sig = _header_first(_hdrs, sim_header_name().lower())
+                            if is_simulation(_recipient, msg.subject, _body) or verify_sim_token(_sig):
+                                logger.info(f"Simulation email (registry/signed) — leaving in inbox, skipping detection: {msg.subject}")
                                 continue
                             logger.info(f"Analyzing new email: {msg.subject} from {msg.from_}")
                             content_to_analyze = f"Subject: {msg.subject}\nBody: {msg.text or msg.html}"

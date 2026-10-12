@@ -92,6 +92,17 @@ def hash_api_key(key: str) -> str:
 SIM_TOKEN_MAX_AGE = int(os.getenv("SIM_TOKEN_MAX_AGE_SECONDS", str(7 * 24 * 3600)))
 
 
+def sim_header_name() -> str:
+    """
+    The header name used to mark simulation mail is DERIVED FROM the server secret,
+    so it is unique and unguessable per deployment — an attacker cannot know which
+    header to look for or forge. Looks like an ordinary vendor header (e.g.
+    'X-Entity-Ref-ID'-style), leaking nothing about its purpose.
+    """
+    digest = hmac.new(AUTH_SECRET.encode(), b"threateye-sim-header-name-v1", hashlib.sha256).hexdigest()
+    return "X-Entity-" + digest[:16].upper()
+
+
 def make_sim_token() -> str:
     """Mint a signed simulation marker: 'sim.<issued_ts>.<hmac-sha256>'."""
     import time
