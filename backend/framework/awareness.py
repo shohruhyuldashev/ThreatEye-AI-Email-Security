@@ -10,6 +10,8 @@ always renders.
 """
 from __future__ import annotations
 
+import os
+
 from typing import Any
 
 from framework.copilot import _llm_text
@@ -62,31 +64,85 @@ def _facts(dept_ranked: list[dict], lures: list[dict], totals: dict) -> str:
     return "\n".join(lines)
 
 
-def _deterministic_conclusion(dept_ranked: list[dict], lures: list[dict], lang: str) -> dict:
-    top = [d["department"] for d in dept_ranked[:3] if d["caught"] > 0]
-    worst_lure = lures[0]["lure"] if lures and lures[0]["caught"] else None
-    headlines = {
-        "uz": {
-            "con": "Simulyatsiya natijalariga ko'ra eng ko'p aldangan bo'limlar: "
-                   + (", ".join(top) if top else "sezilarli zaiflik aniqlanmadi") + ".",
-            "rec": "Awareness treningini birinchi navbatda yuqoridagi bo'limlarда o'tkazish tavsiya etiladi"
-                   + (f"; ayniqsa '{worst_lure}' turidagi phishingga qarshi." if worst_lure else "."),
-        },
-        "ru": {
-            "con": "По результатам симуляции наиболее уязвимые отделы: "
-                   + (", ".join(top) if top else "заметной уязвимости не выявлено") + ".",
-            "rec": "Рекомендуется провести обучение в первую очередь в указанных отделах"
-                   + (f"; особенно против фишинга типа «{worst_lure}»." if worst_lure else "."),
-        },
-        "en": {
-            "con": "Based on the simulation, the most susceptible departments are: "
-                   + (", ".join(top) if top else "no significant weakness found") + ".",
-            "rec": "Run awareness training in the departments above first"
-                   + (f"; especially against '{worst_lure}' style phishing." if worst_lure else "."),
-        },
-    }
-    h = headlines.get(lang, headlines["en"])
-    return {"conclusion": h["con"], "recommendations": h["rec"], "llm": False}
+def _deterministic_conclusion(dept_ranked: list[dict], lures: list[dict], lang: str,
+                              totals: dict | None = None) -> dict:
+    """
+    A rich, data-grounded analysis written from templates, so the grammar is clean
+    and correct in every language (unlike the small base model's weak O'zbek/Русский
+    free-text). Covers overall numbers, a per-department breakdown worst→best, the
+    most effective lure, and prioritised training recommendations.
+    """
+    totals = totals or {}
+    hit = [d for d in dept_ranked if d["caught"] > 0]
+    safe = [d for d in dept_ranked if d["caught"] == 0 and d.get("total", 0) > 0]
+    worst = hit[0] if hit else None
+    worst_lure = lures[0] if lures and lures[0]["caught"] else None
+    t_total = totals.get("total", 0)
+    t_click = totals.get("clicked", 0)
+    t_sub = totals.get("submitted", 0)
+
+    if lang == "ru":
+        con = [f"Симуляция: {t_total} целей, {t_click} перешли по ссылке, {t_sub} ввели данные."]
+        if worst:
+            con.append(f"Наиболее уязвим отдел «{worst['department']}» — "
+                       f"{worst['caught']} из {worst['total']} ({worst['failure_rate']}%).")
+        for d in hit[1:4]:
+            con.append(f"Отдел «{d['department']}»: {d['caught']}/{d['total']} ({d['failure_rate']}%).")
+        if safe:
+            con.append("Без инцидентов: " + ", ".join(d["department"] for d in safe[:5]) + ".")
+        if worst_lure:
+            con.append(f"Самая результативная приманка — «{worst_lure['lure']}» "
+                       f"({worst_lure['caught']} чел.).")
+        rec = []
+        for i, d in enumerate(hit[:3], 1):
+            rec.append(f"{i}. «{d['department']}»: приоритетное обучение распознаванию фишинга "
+                       f"(сброс пароля, счета/реквизиты), проверка платежей вне почты, фишинг-устойчивая MFA.")
+        if not rec:
+            rec.append("Заметных слабых мест нет — поддерживайте регулярные тренинги и MFA.")
+        return {"conclusion": " ".join(con), "recommendations": "\n".join(rec), "llm": False}
+
+    if lang == "en":
+        con = [f"Simulation: {t_total} targets, {t_click} clicked the link, {t_sub} submitted data."]
+        if worst:
+            con.append(f"Most at risk is the '{worst['department']}' department — "
+                       f"{worst['caught']} of {worst['total']} ({worst['failure_rate']}%).")
+        for d in hit[1:4]:
+            con.append(f"'{d['department']}': {d['caught']}/{d['total']} ({d['failure_rate']}%).")
+        if safe:
+            con.append("No incidents: " + ", ".join(d["department"] for d in safe[:5]) + ".")
+        if worst_lure:
+            con.append(f"The most effective lure was '{worst_lure['lure']}' "
+                       f"({worst_lure['caught']} caught).")
+        rec = []
+        for i, d in enumerate(hit[:3], 1):
+            rec.append(f"{i}. '{d['department']}': priority awareness training on recognising phishing "
+                       f"(password-reset, invoice/bank-detail lures), out-of-band payment verification, "
+                       f"and phishing-resistant MFA.")
+        if not rec:
+            rec.append("No significant weakness — keep up regular training and MFA.")
+        return {"conclusion": " ".join(con), "recommendations": "\n".join(rec), "llm": False}
+
+    # O'zbek (default)
+    con = [f"Simulyatsiya: {t_total} ta xodim nishonga olindi, {t_click} tasi havolani bosdi, "
+           f"{t_sub} tasi ma'lumot kiritdi."]
+    if worst:
+        con.append(f"Eng zaif bo'lim — «{worst['department']}»: {worst['caught']} tadan {worst['total']} "
+                   f"({worst['failure_rate']}%) aldandi.")
+    for d in hit[1:4]:
+        con.append(f"«{d['department']}» bo'limi: {d['caught']}/{d['total']} ({d['failure_rate']}%).")
+    if safe:
+        con.append("Hech kim aldanmagan bo'limlar: " + ", ".join(d["department"] for d in safe[:5]) + ".")
+    if worst_lure:
+        con.append(f"Eng ko'p ishlagan aldov turi — «{worst_lure['lure']}» "
+                   f"({worst_lure['caught']} kishi aldandi).")
+    rec = []
+    for i, d in enumerate(hit[:3], 1):
+        rec.append(f"{i}. «{d['department']}» bo'limi: phishingni tanish bo'yicha ustuvor awareness trening "
+                   f"(parol tiklash, hisob-faktura/bank rekvizit aldovlari), to'lovlarni pochtadan tashqari "
+                   f"tasdiqlash va phishingga chidamli MFA joriy etish.")
+    if not rec:
+        rec.append("Sezilarli zaiflik aniqlanmadi — muntazam trening va MFA'ni saqlab turing.")
+    return {"conclusion": " ".join(con), "recommendations": "\n".join(rec), "llm": False}
 
 
 def generate_awareness_report(results: dict, lang: str = "uz", use_llm: bool = True) -> dict[str, Any]:
@@ -130,12 +186,17 @@ def generate_awareness_report(results: dict, lang: str = "uz", use_llm: bool = T
         f"but write ALL the content after them in {_LANG_NAME[lang]}. " + _lang_instr
     )
     user = facts + "\n\n" + _lang_instr
-    text = _llm_text(system, user) if use_llm else None
+
+    # The 3b base model writes fluent English but garbled O'zbek/Русский, so we only
+    # let it free-write for English. For uz/ru we use the rich, data-grounded
+    # template below — clean, correct grammar. (A 7b+ multilingual model could be
+    # allowed to free-write uz/ru here via ALLOW_LLM_MULTILINGUAL=1.)
+    allow_llm = use_llm and (lang == "en" or os.getenv("ALLOW_LLM_MULTILINGUAL") == "1")
+    text = _llm_text(system, user) if allow_llm else None
 
     conclusion = recommendations = None
     if text:
         up = text
-        # Split on the headers the prompt asked for (robust to case / translation echo).
         import re
         m = re.split(r"(?i)recommendations?\s*:", up, maxsplit=1)
         if len(m) == 2:
@@ -144,12 +205,12 @@ def generate_awareness_report(results: dict, lang: str = "uz", use_llm: bool = T
         else:
             conclusion = up.strip()
     if not conclusion:
-        det = _deterministic_conclusion(dept_ranked, lures, lang)
+        det = _deterministic_conclusion(dept_ranked, lures, lang, totals)
         conclusion, recommendations, used_llm = det["conclusion"], det["recommendations"], False
     else:
         used_llm = True
         if not recommendations:
-            recommendations = _deterministic_conclusion(dept_ranked, lures, lang)["recommendations"]
+            recommendations = _deterministic_conclusion(dept_ranked, lures, lang, totals)["recommendations"]
 
     return {
         "conclusion": conclusion,
