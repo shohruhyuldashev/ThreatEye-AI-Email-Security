@@ -42,3 +42,19 @@ def test_api_key_format():
     assert k.startswith("tek_")
     assert len(s.hash_api_key(k)) == 64
     assert s.hash_api_key(k) == s.hash_api_key(k)
+
+
+def test_sim_token_signed_and_verified():
+    tok = s.make_sim_token()
+    assert s.verify_sim_token(tok)                      # our own token
+    assert not s.verify_sim_token("1")                  # legacy static value (forgery)
+    assert not s.verify_sim_token("sim.9999999999.deadbeef")  # bad signature
+    assert not s.verify_sim_token("")                   # empty
+    assert not s.verify_sim_token(tok[:-3] + "000")     # tampered signature
+
+
+def test_sim_token_expires():
+    import time, hmac, hashlib
+    old = f"sim.{int(time.time()) - 999999}"
+    sig = hmac.new(s.AUTH_SECRET.encode(), old.encode(), hashlib.sha256).hexdigest()
+    assert not s.verify_sim_token(f"{old}.{sig}", max_age=3600)   # correctly signed but too old

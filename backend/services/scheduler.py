@@ -20,10 +20,26 @@ def start_scheduler():
     # Or, run every 24 hours just to see it work:
     scheduler.add_job(trigger_random_campaign, 'interval', hours=24, id='phishing_campaign_job')
 
+    # 2. Auto-heal SIEM delivery: re-send any alerts that failed to reach the SIEM
+    # (e.g. a transient outage or Elasticsearch still starting up), so no alert is
+    # silently lost. Idempotent and safe to run often.
+    scheduler.add_job(_auto_siem_replay, 'interval', minutes=10, id='siem_replay_job',
+                      next_run_time=None)
+
     # Real-time Email Watcher now runs in a dedicated thread managed by main.py
 
     scheduler.start()
     logger.info("Background scheduler started successfully.")
+
+
+def _auto_siem_replay():
+    try:
+        from framework.siem import replay_failed
+        result = replay_failed(200)
+        if result.get("replayed"):
+            logger.info("Auto SIEM replay: re-sent %s failed alert(s).", result["replayed"])
+    except Exception as e:
+        logger.warning("Auto SIEM replay failed: %s", e)
 
 def shutdown_scheduler():
     scheduler.shutdown()
