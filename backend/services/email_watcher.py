@@ -234,14 +234,14 @@ def _acquire_single_watcher_slot():
     try:
         from framework.cache import get_redis
         r = get_redis()
-        if r is not None and r.set("threateye:watcher:lock", owner, nx=True, ex=90):
+        if r is not None and r.set("threateye:watcher:lock", owner, nx=True, ex=45):
             import threading
             def _refresh():
                 import time as _t
                 while True:
-                    _t.sleep(30)
+                    _t.sleep(15)
                     try:
-                        r.expire("threateye:watcher:lock", 90)
+                        r.expire("threateye:watcher:lock", 45)
                     except Exception:
                         return
             threading.Thread(target=_refresh, daemon=True, name="WatcherLockRefresh").start()
@@ -276,10 +276,17 @@ def start_email_watcher():
     if os.getenv("RUN_EMAIL_WATCHER", "1").lower() in ("0", "false", "no", "off"):
         logger.info("RUN_EMAIL_WATCHER disabled; this process will not watch mail.")
         return
-    _slot = _acquire_single_watcher_slot()
-    if _slot is None:
-        logger.info("Another process holds the watcher slot; this worker will not watch mail.")
-        return
+    # Keep trying to acquire the single-watcher slot: a worker that loses the race
+    # waits and takes over automatically if the current holder dies (its lock expires).
+    _slot = None
+    _logged_wait = False
+    while _slot is None:
+        _slot = _acquire_single_watcher_slot()
+        if _slot is None:
+            if not _logged_wait:
+                logger.info("Another process holds the watcher slot; standing by to take over.")
+                _logged_wait = True
+            time.sleep(20)
 
     started = set()
     while True:
