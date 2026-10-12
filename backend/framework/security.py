@@ -84,6 +84,43 @@ def hash_api_key(key: str) -> str:
     return hmac.new(AUTH_SECRET.encode(), key.encode(), hashlib.sha256).hexdigest()
 
 
+# --- phishing-simulation marker token -------------------------------------------
+# The X-ThreatEye-Sim header marks our OWN GoPhish simulation mail so the detector
+# never quarantines it. A STATIC value would let an attacker forge the header and
+# bypass detection, so the marker is an HMAC-signed, time-stamped token: only a
+# holder of the server secret can mint a valid one, and it expires.
+SIM_TOKEN_MAX_AGE = int(os.getenv("SIM_TOKEN_MAX_AGE_SECONDS", str(7 * 24 * 3600)))
+
+
+def make_sim_token() -> str:
+    """Mint a signed simulation marker: 'sim.<issued_ts>.<hmac-sha256>'."""
+    import time
+    payload = f"sim.{int(time.time())}"
+    sig = hmac.new(AUTH_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+    return f"{payload}.{sig}"
+
+
+def verify_sim_token(token: str, max_age: int | None = None) -> bool:
+    """True only for an unexpired, correctly-signed simulation token."""
+    import time
+    if not token:
+        return False
+    try:
+        prefix, ts_str, sig = token.strip().split(".")
+        if prefix != "sim":
+            return False
+        payload = f"{prefix}.{ts_str}"
+        expected = hmac.new(AUTH_SECRET.encode(), payload.encode(), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(sig, expected):
+            return False
+        age_limit = SIM_TOKEN_MAX_AGE if max_age is None else max_age
+        if age_limit and (time.time() - int(ts_str)) > age_limit:
+            return False
+        return True
+    except Exception:
+        return False
+
+
 # --- token signing secret -------------------------------------------------------
 def load_auth_secret() -> str:
     env_secret = os.getenv("THREATEYE_AUTH_SECRET", "").strip()

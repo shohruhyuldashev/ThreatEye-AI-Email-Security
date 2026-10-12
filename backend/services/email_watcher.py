@@ -91,12 +91,14 @@ def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
                     try:
                         c = conn.cursor()
                         for msg in mailbox.fetch(A(seen=False)):
-                            # Never analyse/quarantine our OWN phishing-simulation mail
-                            # (GoPhish stamps X-ThreatEye-Sim). It must reach the employee
-                            # so they can interact with it, and it must not count as a
-                            # real threat or trip self-detection.
-                            if _header_first(getattr(msg, "headers", {}) or {}, "x-threateye-sim"):
-                                logger.info(f"Simulation email — leaving in inbox, skipping detection: {msg.subject}")
+                            # Never analyse/quarantine our OWN phishing-simulation mail.
+                            # GoPhish stamps X-ThreatEye-Sim with an HMAC-signed, expiring
+                            # token; we VERIFY the signature so a forged header can't be
+                            # used to bypass detection. It must reach the employee and must
+                            # not count as a real threat.
+                            from framework.security import verify_sim_token
+                            if verify_sim_token(_header_first(getattr(msg, "headers", {}) or {}, "x-threateye-sim")):
+                                logger.info(f"Verified simulation email — leaving in inbox, skipping detection: {msg.subject}")
                                 continue
                             logger.info(f"Analyzing new email: {msg.subject} from {msg.from_}")
                             content_to_analyze = f"Subject: {msg.subject}\nBody: {msg.text or msg.html}"

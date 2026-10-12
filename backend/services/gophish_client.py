@@ -157,13 +157,17 @@ def ensure_sending_profile(client, cfg: dict):
     smtp.from_address = _bare_email(cfg["smtp_from"])
     smtp.interface_type = "SMTP"
     smtp.ignore_cert_errors = True
-    hdrs = list(getattr(smtp, "headers", None) or [])
+
+    # Stamp a FRESH signed simulation token on every (re)configure so the marker
+    # stays within its expiry window. An attacker cannot forge this without the
+    # server secret, so it can't be used to bypass detection.
+    from framework.security import make_sim_token
 
     def _key(h):
         return h.get("key") if isinstance(h, dict) else getattr(h, "key", "")
 
-    if not any(_key(h) == SIM_HEADER_KEY for h in hdrs):
-        hdrs.append({"key": SIM_HEADER_KEY, "value": "1"})
+    hdrs = [h for h in (getattr(smtp, "headers", None) or []) if _key(h) != SIM_HEADER_KEY]
+    hdrs.append({"key": SIM_HEADER_KEY, "value": make_sim_token()})
     smtp.headers = hdrs
     if existing:
         try:
