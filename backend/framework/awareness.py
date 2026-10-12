@@ -22,8 +22,10 @@ def _rank_departments(departments: list[dict]) -> list[dict]:
     ranked = []
     for d in departments or []:
         total = d.get("total", 0) or 0
-        caught = (d.get("clicked", 0) or 0) + (d.get("submitted", 0) or 0)
-        rate = round((caught / total) * 100, 1) if total else 0.0
+        # Submitting credentials implies clicking, so "caught" = people who at least
+        # clicked (never double-count), and the rate can't exceed 100%.
+        caught = min(max(d.get("clicked", 0) or 0, d.get("submitted", 0) or 0), total) if total else 0
+        rate = round(min(100.0, (caught / total) * 100), 1) if total else 0.0
         ranked.append({**d, "caught": caught, "failure_rate": rate})
     return sorted(ranked, key=lambda x: (x["failure_rate"], x["caught"]), reverse=True)
 
@@ -87,10 +89,13 @@ def _deterministic_conclusion(dept_ranked: list[dict], lures: list[dict], lang: 
     return {"conclusion": h["con"], "recommendations": h["rec"], "llm": False}
 
 
-def generate_awareness_report(results: dict, lang: str = "uz") -> dict[str, Any]:
+def generate_awareness_report(results: dict, lang: str = "uz", use_llm: bool = True) -> dict[str, Any]:
     """
     results: the dict from services.gophish_client.get_results()
              ({campaigns, departments, employees, ...}).
+    use_llm: when False, skip the (slow, CPU-bound) model call and return the
+             deterministic conclusion — used for the responsive inline Analytics
+             panel; the PDF export uses the full LLM write-up.
     Returns {conclusion, recommendations, department_ranking, lure_breakdown, llm}.
     """
     lang = lang if lang in _LANG_NAME else "uz"
@@ -117,7 +122,7 @@ def generate_awareness_report(results: dict, lang: str = "uz") -> dict[str, Any]
         "Return two clearly separated parts with these exact headers on their own lines: "
         "CONCLUSION: then the analysis, and RECOMMENDATIONS: then a short prioritised list."
     )
-    text = _llm_text(system, facts)
+    text = _llm_text(system, facts) if use_llm else None
 
     conclusion = recommendations = None
     if text:

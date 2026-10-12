@@ -599,12 +599,17 @@ def simulation_awareness_report_pdf(
 @router.get("/simulations/awareness")
 def simulation_awareness_json(
     lang: str = Query("uz", pattern="^(uz|ru|en)$"),
+    fast: bool = Query(True),
     _auth: dict = Depends(require_auth),
 ):
-    """Same analysis as the PDF, as JSON — for showing the conclusion in the dashboard."""
+    """
+    Same analysis as the PDF, as JSON — for the dashboard. `fast=true` (default)
+    skips the slow LLM write-up and returns the deterministic conclusion, so the
+    Analytics panel stays responsive; the PDF export uses the full LLM version.
+    """
     from services.gophish_client import get_results
     from framework.awareness import generate_awareness_report
-    return generate_awareness_report(get_results(), lang=lang)
+    return generate_awareness_report(get_results(), lang=lang, use_llm=not fast)
 
 
 @router.post("/emails/{email_id}/release")

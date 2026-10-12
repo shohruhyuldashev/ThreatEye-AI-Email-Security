@@ -586,6 +586,41 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                 </div>
+
+                <!-- Phishing Simulation Insights (AI-driven GoPhish) -->
+                <div class="glass-card rounded-xl p-6 mt-6">
+                    <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
+                        <h3 class="text-lg font-semibold text-white"><i class="fa-solid fa-chart-line mr-2 text-cyber-warning"></i> Phishing Simulation Insights</h3>
+                        <div class="flex items-center gap-2">
+                            <select id="analytics-sim-lang" class="cyber-input p-2 rounded-lg text-sm">
+                                <option value="uz" selected>O'zbek</option>
+                                <option value="ru">Русский</option>
+                                <option value="en">English</option>
+                            </select>
+                            <button id="analytics-awareness-btn" class="py-2 px-4 bg-cyber-warning/10 border border-cyber-warning text-cyber-warning hover:bg-cyber-warning/20 rounded-lg text-sm font-medium whitespace-nowrap"><i class="fa-solid fa-download mr-1"></i> Awareness PDF</button>
+                        </div>
+                    </div>
+                    <div id="analytics-sim-conclusion" class="mb-5 text-sm text-gray-300 bg-cyber-dark/50 border border-cyber-border rounded-lg p-4 leading-relaxed">
+                        <span class="text-gray-500">AI xulosasi yuklanmoqda…</span>
+                    </div>
+                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-300 mb-2">Qaysi bo'lim bosyapti (eng zaif birinchi)</h4>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="text-xs text-gray-500 uppercase border-b border-cyber-border">
+                                        <tr><th class="text-left py-2">Bo'lim</th><th class="text-left py-2">Bosgan</th><th class="text-left py-2">Jami</th><th class="text-left py-2">Foiz</th></tr>
+                                    </thead>
+                                    <tbody id="analytics-sim-dept"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 class="text-sm font-semibold text-gray-300 mb-2">Kim bosib qo'ydi</h4>
+                            <div id="analytics-sim-clickers" class="space-y-1 max-h-64 overflow-y-auto custom-scrollbar text-sm"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `,
         framework: `
@@ -3388,5 +3423,70 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
             console.error("Failed to load analytics:", error);
         }
+        loadSimInsights();
     }
+
+    // Phishing-simulation insights for the Analytics (Tahlillar) view: the AI
+    // conclusion, which departments click, and exactly who clicked.
+    async function loadSimInsights() {
+        const lang = (document.getElementById('analytics-sim-lang') || {}).value || 'uz';
+        const concEl = document.getElementById('analytics-sim-conclusion');
+        const deptEl = document.getElementById('analytics-sim-dept');
+        const clickEl = document.getElementById('analytics-sim-clickers');
+        if (!concEl) return;
+        try {
+            const res = await apiFetch(`${API_BASE}/simulations/awareness?lang=${encodeURIComponent(lang)}`);
+            const a = await res.json();
+            const tag = a.llm ? '<span class="text-[10px] px-2 py-0.5 rounded bg-cyber-neon/20 text-cyber-neon ml-2">LLM</span>'
+                              : '<span class="text-[10px] px-2 py-0.5 rounded bg-cyber-warning/20 text-cyber-warning ml-2">rules</span>';
+            concEl.innerHTML =
+                `<div class="text-white font-semibold mb-1">Xulosa ${tag}</div>` +
+                `<div class="mb-3">${escapeHTML(a.conclusion || '')}</div>` +
+                `<div class="text-white font-semibold mb-1">Tavsiyalar</div>` +
+                `<div class="text-gray-400">${escapeHTML(a.recommendations || '')}</div>`;
+            const dept = a.department_ranking || [];
+            deptEl.innerHTML = dept.length ? dept.map(d => `
+                <tr class="border-b border-cyber-border/40">
+                    <td class="py-1.5 text-gray-300">${escapeHTML(d.department || '')}</td>
+                    <td class="py-1.5">${d.caught || 0}</td>
+                    <td class="py-1.5 text-gray-500">${d.total || 0}</td>
+                    <td class="py-1.5 ${(d.failure_rate||0) >= 50 ? 'text-cyber-danger' : 'text-cyber-warning'} font-semibold">${d.failure_rate || 0}%</td>
+                </tr>`).join('') : '<tr><td colspan="4" class="py-2 text-gray-500 text-xs">Hali simulyatsiya natijasi yo\'q.</td></tr>';
+        } catch (e) {
+            concEl.innerHTML = '<span class="text-cyber-danger text-xs">Xulosani yuklab bo\'lmadi (GoPhish/LLM).</span>';
+        }
+        // Who clicked — from the live GoPhish results.
+        try {
+            const r2 = await apiFetch(`${API_BASE}/simulations/results`);
+            const d2 = await r2.json();
+            const emps = (d2.employees || []).filter(e => e.clicked || e.submitted || e.status === 'Clicked Link' || e.status === 'Submitted Data');
+            clickEl.innerHTML = emps.length ? emps.map(e => `
+                <div class="flex justify-between items-center bg-cyber-dark p-2 rounded">
+                    <span class="text-gray-300">${escapeHTML(e.email || e.name || '')}</span>
+                    <span class="text-xs text-gray-500">${escapeHTML(e.department || '')} ${e.submitted ? '· <span class="text-cyber-danger">ma\'lumot kiritdi</span>' : '· bosdi'}</span>
+                </div>`).join('') : '<div class="text-gray-500 text-xs py-2">Hali hech kim bosmagan.</div>';
+        } catch (e) {
+            if (clickEl) clickEl.innerHTML = '<div class="text-gray-500 text-xs py-2">Natija yo\'q.</div>';
+        }
+    }
+
+    // Awareness PDF + language switch inside the Analytics view.
+    document.addEventListener('click', async (e) => {
+        const btn = e.target.closest('#analytics-awareness-btn');
+        if (!btn) return;
+        const lang = (document.getElementById('analytics-sim-lang') || {}).value || 'uz';
+        const orig = btn.innerHTML; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-1"></i>'; btn.disabled = true;
+        try {
+            const res = await apiFetch(`${API_BASE}/simulations/report/pdf?lang=${encodeURIComponent(lang)}`);
+            if (!res.ok) throw new Error('pdf');
+            const blob = await res.blob(); const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url;
+            a.download = `ThreatEye_Awareness_${lang}_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a);
+        } catch (err) { showCustomAlert('Awareness PDF yaratib bo\'lmadi.', 'Export', true); }
+        finally { btn.innerHTML = orig; btn.disabled = false; }
+    });
+    document.addEventListener('change', (e) => {
+        if (e.target && e.target.id === 'analytics-sim-lang') loadSimInsights();
+    });
 });
