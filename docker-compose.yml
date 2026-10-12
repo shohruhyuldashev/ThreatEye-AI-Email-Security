@@ -3,8 +3,8 @@ services:
     image: gophish/gophish:latest
     container_name: gophish
     ports:
-      - "3333:3333"
-      - "80:80"
+      - "127.0.0.1:3333:3333"
+      - "127.0.0.1:80:80"
     restart: unless-stopped
     volumes:
       - gophish_data:/opt/gophish
@@ -65,8 +65,8 @@ services:
     container_name: mail_server
     hostname: mail.example.com
     ports:
-      - "2525:25"
-      - "3143:143"
+      - "127.0.0.1:2525:25"
+      - "127.0.0.1:3143:143"
     environment:
       - ENABLE_SPAMASSASSIN=0
       - ENABLE_CLAMAV=0
@@ -91,7 +91,7 @@ services:
       network: host
     container_name: phishing_backend
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - ./backend:/app
       - ./uploads:/app/uploads
@@ -113,7 +113,17 @@ services:
       - CLAMAV_TCP=${CLAMAV_TCP:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - LLM_TIMEOUT=${LLM_TIMEOUT:-90}
-      - UVICORN_RELOAD=${UVICORN_RELOAD:-1}
+      # Production defaults: no live-reload (run workers). Set UVICORN_RELOAD=1 only
+      # for local development with a source bind-mount.
+      - UVICORN_RELOAD=${UVICORN_RELOAD:-0}
+      - UVICORN_WORKERS=${UVICORN_WORKERS:-2}
+      # TLS-only IMAP by default. The bundled docker-mailserver speaks plaintext on
+      # :143, so set IMAP_ALLOW_INSECURE=1 in .env ONLY when testing against it.
+      # Production mail sources (Microsoft 365 / Google Workspace / real IMAPS) are
+      # always TLS, so leave this at 0.
+      - IMAP_ALLOW_INSECURE=${IMAP_ALLOW_INSECURE:-0}
+      # Only the primary worker runs the IMAP watcher (avoids duplicate processing).
+      - RUN_EMAIL_WATCHER=${RUN_EMAIL_WATCHER:-1}
     depends_on:
       gophish:
         condition: service_started
@@ -153,7 +163,7 @@ services:
       - ROUNDCUBEMAIL_SMTP_SERVER=tls://mail_server
       - ROUNDCUBEMAIL_SMTP_PORT=25
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     depends_on:
       - mail_server
     restart: unless-stopped
@@ -199,7 +209,7 @@ services:
       memlock: { soft: -1, hard: -1 }
       nofile: { soft: 65536, hard: 65536 }
     ports:
-      - "9200:9200"
+      - "127.0.0.1:9200:9200"
     volumes:
       - es_data:/usr/share/elasticsearch/data
     healthcheck:
@@ -219,7 +229,7 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - SERVER_PUBLICBASEURL=http://localhost:5601
     ports:
-      - "5601:5601"
+      - "127.0.0.1:5601:5601"
     depends_on:
       elasticsearch:
         condition: service_healthy

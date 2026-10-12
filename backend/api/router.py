@@ -1729,12 +1729,16 @@ def test_imap_connection(req: IMAPTestRequest, _auth: dict = Depends(require_rol
 
     try:
         from imap_tools import MailBoxUnencrypted, MailBox
-        # Try unencrypted first for local labs, fallback to SSL.
+        # TLS first; only fall back to plaintext when explicitly allowed (local lab).
+        allow_insecure = os.getenv("IMAP_ALLOW_INSECURE", "0").lower() in ("1", "true", "yes", "on")
         try:
-            with MailBoxUnencrypted(server).login(user, password) as mailbox:
-                mailbox.folder.status('INBOX')
-        except Exception:
             with MailBox(server).login(user, password) as mailbox:
+                mailbox.folder.status('INBOX')
+        except Exception as tls_err:
+            if not allow_insecure:
+                raise HTTPException(status_code=400,
+                                    detail=f"TLS IMAP connection failed and insecure fallback is disabled: {str(tls_err)[:200]}")
+            with MailBoxUnencrypted(server).login(user, password) as mailbox:
                 mailbox.folder.status('INBOX')
         return {"status": "success", "message": f"Successfully connected to {server} as {user}."}
     except Exception as e:

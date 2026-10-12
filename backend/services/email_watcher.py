@@ -62,17 +62,30 @@ def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
     quarantining phishing. Reconnects on error. Runs in its own daemon thread so
     many employee mailboxes can be protected in parallel.
     """
+    import os
     import time
     from imap_tools import MailBoxUnencrypted, MailBox, A
     from services.ai_detector import analyze_email_hybrid
 
     QUARANTINE_FOLDER = "Quarantine_AI"
+    # Production is TLS-only. Plaintext IMAP (which sends the password in the clear)
+    # is used ONLY when explicitly opted in for a local lab mail server.
+    allow_insecure = os.getenv("IMAP_ALLOW_INSECURE", "0").lower() in ("1", "true", "yes", "on")
     while True:
         try:
+            # Always try an encrypted (IMAPS/TLS) connection first.
             try:
-                mailbox_conn = MailBoxUnencrypted(IMAP_SERVER).login(IMAP_USER, IMAP_PASS)
-            except:
                 mailbox_conn = MailBox(IMAP_SERVER).login(IMAP_USER, IMAP_PASS)
+            except Exception as tls_err:
+                if not allow_insecure:
+                    # Never silently downgrade to cleartext in production.
+                    raise RuntimeError(
+                        f"TLS IMAP connection to {IMAP_SERVER} failed and insecure fallback "
+                        f"is disabled (set IMAP_ALLOW_INSECURE=1 only for a local lab): {tls_err}"
+                    )
+                logger.warning("TLS IMAP failed for %s; falling back to UNENCRYPTED (lab only): %s",
+                               IMAP_USER, tls_err)
+                mailbox_conn = MailBoxUnencrypted(IMAP_SERVER).login(IMAP_USER, IMAP_PASS)
 
             with mailbox_conn as mailbox:
                 folders_supported = True
@@ -206,13 +219,68 @@ def _load_mailboxes():
     return accounts
 
 
+def _acquire_single_watcher_slot():
+    """
+    Ensure ONLY ONE process runs the watcher, even with multiple Uvicorn workers or
+    replicas, so mail is never fetched/analysed/quarantined twice. Uses a Redis lock
+    when available (covers multiple hosts); otherwise an OS file lock (covers multiple
+    workers on one host). Returns a keep-alive handle, or None if another process
+    already holds the slot.
+    """
+    import os
+    import socket
+    owner = f"{socket.gethostname()}:{os.getpid()}"
+    # 1) Redis lock (multi-host safe), refreshed by a daemon thread.
+    try:
+        from framework.cache import get_redis
+        r = get_redis()
+        if r is not None and r.set("threateye:watcher:lock", owner, nx=True, ex=90):
+            import threading
+            def _refresh():
+                import time as _t
+                while True:
+                    _t.sleep(30)
+                    try:
+                        r.expire("threateye:watcher:lock", 90)
+                    except Exception:
+                        return
+            threading.Thread(target=_refresh, daemon=True, name="WatcherLockRefresh").start()
+            logger.info("Acquired watcher slot via Redis lock (%s).", owner)
+            return "redis"
+        if r is not None:
+            return None  # another process holds the Redis lock
+    except Exception as e:
+        logger.debug("Redis watcher lock unavailable (%s); trying file lock.", e)
+    # 2) File lock (single-host, multi-worker safe).
+    try:
+        import fcntl
+        f = open("/tmp/threateye_watcher.lock", "w")
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        f.write(owner); f.flush()
+        logger.info("Acquired watcher slot via file lock (%s).", owner)
+        return f  # keep the handle alive to hold the lock
+    except Exception:
+        return None
+
+
 def start_email_watcher():
     """
     Dispatcher: spawn one IMAP IDLE watcher thread per configured mailbox so every
-    employee's inbox is protected, not just one. Waits for config if none is set yet.
+    employee's inbox is protected, not just one. Runs in only ONE process (lock),
+    so multiple workers/replicas don't double-process mail.
     """
+    import os
     import time
     import threading
+
+    if os.getenv("RUN_EMAIL_WATCHER", "1").lower() in ("0", "false", "no", "off"):
+        logger.info("RUN_EMAIL_WATCHER disabled; this process will not watch mail.")
+        return
+    _slot = _acquire_single_watcher_slot()
+    if _slot is None:
+        logger.info("Another process holds the watcher slot; this worker will not watch mail.")
+        return
+
     started = set()
     while True:
         try:
