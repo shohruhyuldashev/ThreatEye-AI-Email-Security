@@ -112,17 +112,25 @@ def generate_awareness_report(results: dict, lang: str = "uz", use_llm: bool = T
     }
 
     facts = _facts(dept_ranked, lures, totals)
+    _lang_instr = {
+        "uz": "MUHIM: Javobni TO'LIQ o'zbek tilida yoz. Har bir gap, xulosa va tavsiya "
+              "o'zbekcha bo'lishi SHART. Inglizcha yoki ruscha yozma.",
+        "ru": "ВАЖНО: Пиши ответ ПОЛНОСТЬЮ на русском языке. Каждое предложение и "
+              "рекомендация должны быть на русском. Не пиши по-английски.",
+        "en": "Write the entire answer in clear, professional English.",
+    }[lang]
     system = (
+        _lang_instr + " "
         "You are a cybersecurity awareness advisor for a SOC. Using ONLY the phishing "
         "simulation statistics provided (do not invent names or numbers), write a short, "
         "board-ready analysis. Cover: which departments are most at risk, which phishing "
         "lure types fool them, and concrete awareness-training recommendations prioritised "
         "by department. Be concise and practical. "
-        f"Write the entire answer in {_LANG_NAME[lang]}. "
-        "Return two clearly separated parts with these exact headers on their own lines: "
-        "CONCLUSION: then the analysis, and RECOMMENDATIONS: then a short prioritised list."
+        "Use exactly two headers on their own lines — 'CONCLUSION:' and 'RECOMMENDATIONS:' — "
+        f"but write ALL the content after them in {_LANG_NAME[lang]}. " + _lang_instr
     )
-    text = _llm_text(system, facts) if use_llm else None
+    user = facts + "\n\n" + _lang_instr
+    text = _llm_text(system, user) if use_llm else None
 
     conclusion = recommendations = None
     if text:
