@@ -104,9 +104,22 @@ def process_email_payload(payload: dict) -> dict:
     }
 
 
+def _blocking_redis():
+    """A dedicated Redis client whose socket timeout exceeds the BLPOP block time,
+    so blocking pops don't raise (and lose items) the way the shared 2s-timeout
+    client would."""
+    try:
+        import redis
+        url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        return redis.Redis.from_url(url, socket_connect_timeout=5, socket_timeout=20,
+                                    decode_responses=True)
+    except Exception:
+        return None
+
+
 def consume_ingest_queue():
     """Blocking consumer loop — runs in the single-watcher process."""
-    r = _redis()
+    r = _blocking_redis()
     if r is None:
         logger.info("Ingest queue consumer: Redis unavailable; async ingestion disabled.")
         return
