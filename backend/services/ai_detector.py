@@ -432,14 +432,23 @@ def detect_prompt_injection(text: str) -> tuple[int, dict]:
     }
 
 def _email_domain(addr: str) -> str:
-    """Registered domain of an email address (or empty)."""
-    # Local part excludes '@' and whitespace (no overlap with the domain class), so
-    # the match is linear — avoids polynomial backtracking on adversarial input.
-    m = re.search(r'[^@\s]+@([\w.-]+)', addr or '')
-    if not m:
-        return ''
-    ext = tld_extract(m.group(1))
-    return f"{ext.domain}.{ext.suffix}".lower() if ext.domain else m.group(1).lower()
+    """Registered domain of an email address (or empty). Pure string ops — no regex,
+    so there is no backtracking/ReDoS surface."""
+    a = (addr or "").strip().strip("<>").strip()
+    if "@" not in a:
+        return ""
+    tail = a.rsplit("@", 1)[1]
+    host = []
+    for ch in tail:
+        if ch.isalnum() or ch in ".-":
+            host.append(ch)
+        else:
+            break
+    host = "".join(host)
+    if not host:
+        return ""
+    ext = tld_extract(host)
+    return f"{ext.domain}.{ext.suffix}".lower() if ext.domain else host.lower()
 
 
 def detect_bec_signals(text: str, metadata: dict | None = None) -> tuple[int, dict]:
