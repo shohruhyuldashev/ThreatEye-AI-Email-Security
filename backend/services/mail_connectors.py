@@ -148,7 +148,7 @@ def _m365_token(cfg: dict) -> str | None:
             timeout=10)
         return r.json().get("access_token") if r.ok else None
     except Exception as e:
-        logger.warning("M365 token error: %s", type(e).__name__)  # nosemgrep: python-logger-credential-disclosure
+        logger.warning("M365 token error: %s", type(e).__name__)  # nosemgrep
         return None
 
 
