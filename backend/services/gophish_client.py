@@ -137,16 +137,40 @@ def _bare_email(value: str) -> str:
     return m.group(0).strip() if m else "it-security@example.com"
 
 
+SIM_HEADER_KEY = "X-ThreatEye-Sim"
+
+
 def ensure_sending_profile(client, cfg: dict):
-    """Find or create the reusable SMTP sending profile."""
+    """
+    Find or create the reusable SMTP sending profile. Every simulation email
+    carries the X-ThreatEye-Sim header so the detector recognises its own test
+    mail and never quarantines it (self-detection would hide the lure from the
+    employee and pollute the threat stats).
+    """
+    existing = None
     for prof in client.smtp.get():
         if prof.name == SENDING_PROFILE_NAME:
-            return prof
-    smtp = SMTP(name=SENDING_PROFILE_NAME)
+            existing = prof
+            break
+    smtp = existing or SMTP(name=SENDING_PROFILE_NAME)
     smtp.host = cfg["smtp_host"]
     smtp.from_address = _bare_email(cfg["smtp_from"])
     smtp.interface_type = "SMTP"
     smtp.ignore_cert_errors = True
+    hdrs = list(getattr(smtp, "headers", None) or [])
+
+    def _key(h):
+        return h.get("key") if isinstance(h, dict) else getattr(h, "key", "")
+
+    if not any(_key(h) == SIM_HEADER_KEY for h in hdrs):
+        hdrs.append({"key": SIM_HEADER_KEY, "value": "1"})
+    smtp.headers = hdrs
+    if existing:
+        try:
+            client.smtp.put(smtp)
+        except Exception as e:
+            logger.warning("Could not update sending profile headers: %s", e)
+        return smtp
     return client.smtp.post(smtp)
 
 

@@ -56,39 +56,19 @@ def _extract_auth_metadata(msg) -> dict:
     }
 
 
-def start_email_watcher():
+def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
     """
-    Checks the configured email inbox for new messages and routes them through the AI detector.
-    If phishing is detected, it moves the email to quarantine.
+    Watch ONE mailbox over IMAP IDLE and route new mail through the AI detector,
+    quarantining phishing. Reconnects on error. Runs in its own daemon thread so
+    many employee mailboxes can be protected in parallel.
     """
-    # NOTE: Since the user hasn't specified an explicit provider yet,
-    # we implement a generic IMAP polling structure here using imap-tools.
-    
     import time
     from imap_tools import MailBoxUnencrypted, MailBox, A
-    from services.ai_detector import analyze_email_text, analyze_email_hybrid
-    
+    from services.ai_detector import analyze_email_hybrid
+
+    QUARANTINE_FOLDER = "Quarantine_AI"
     while True:
         try:
-            conn = get_db_connection()
-            c = conn.cursor()
-            
-            # Load dynamic settings instead of ENV
-            c.execute("SELECT key, value FROM settings WHERE key IN ('imap_server', 'imap_user', 'imap_pass')")
-            from framework.secretbox import decrypt_setting
-            settings = {row['key']: decrypt_setting(row['key'], row['value']) for row in c.fetchall()}
-            conn.close()
-            
-            IMAP_SERVER = settings.get("imap_server", "")
-            IMAP_USER = settings.get("imap_user", "")
-            IMAP_PASS = settings.get("imap_pass", "")
-            QUARANTINE_FOLDER = "Quarantine_AI"
-
-            if not all([IMAP_SERVER, IMAP_USER, IMAP_PASS]):
-                logger.warning("IMAP credentials not fully configured in settings. Skipping email watcher IDLE loop. Retrying in 60s...")
-                time.sleep(60)
-                continue
-
             try:
                 mailbox_conn = MailBoxUnencrypted(IMAP_SERVER).login(IMAP_USER, IMAP_PASS)
             except:
@@ -103,7 +83,7 @@ def start_email_watcher():
                     logger.debug(f"IMAP Folders not supported by this server: {e}")
                     folders_supported = False
 
-                logger.info(f"IMAP IDLE connected to {IMAP_SERVER}. Waiting for new emails...")
+                logger.info(f"IMAP IDLE connected: {IMAP_USER}@{IMAP_SERVER}. Watching for new mail...")
                 
                 while True:
                     # Process current messages
@@ -111,6 +91,13 @@ def start_email_watcher():
                     try:
                         c = conn.cursor()
                         for msg in mailbox.fetch(A(seen=False)):
+                            # Never analyse/quarantine our OWN phishing-simulation mail
+                            # (GoPhish stamps X-ThreatEye-Sim). It must reach the employee
+                            # so they can interact with it, and it must not count as a
+                            # real threat or trip self-detection.
+                            if _header_first(getattr(msg, "headers", {}) or {}, "x-threateye-sim"):
+                                logger.info(f"Simulation email — leaving in inbox, skipping detection: {msg.subject}")
+                                continue
                             logger.info(f"Analyzing new email: {msg.subject} from {msg.from_}")
                             content_to_analyze = f"Subject: {msg.subject}\nBody: {msg.text or msg.html}"
                             
@@ -169,6 +156,65 @@ def start_email_watcher():
                         pass
 
         except Exception as e:
-            logger.error(f"IMAP watcher IDLE loop encountered an error: {e}")
-            logger.info("Attempting to reconnect in 10 seconds...")
+            logger.error(f"IMAP watcher ({IMAP_USER}) error: {e}; reconnecting in 10s...")
             time.sleep(10)
+
+
+def _load_mailboxes():
+    """
+    Mailboxes to protect. An `imap_accounts` setting (JSON list of
+    {"user","pass"[,"server"]}) watches many employee mailboxes at once; otherwise
+    it falls back to the single imap_user/imap_pass.
+    """
+    import json
+    from framework.secretbox import decrypt_setting
+    conn = get_db_connection()
+    try:
+        c = conn.cursor()
+        c.execute("SELECT key, value FROM settings WHERE key IN "
+                  "('imap_server','imap_user','imap_pass','imap_accounts')")
+        s = {row['key']: decrypt_setting(row['key'], row['value']) for row in c.fetchall()}
+    finally:
+        conn.close()
+    server = s.get("imap_server", "")
+    accounts = []
+    raw = s.get("imap_accounts", "")
+    if raw:
+        try:
+            for a in json.loads(raw):
+                if a.get("user") and a.get("pass"):
+                    accounts.append((a.get("server") or server, a["user"], a["pass"]))
+        except Exception as e:
+            logger.error("Invalid imap_accounts JSON: %s", e)
+    if not accounts and s.get("imap_user") and s.get("imap_pass"):
+        accounts.append((server, s["imap_user"], s["imap_pass"]))
+    return accounts
+
+
+def start_email_watcher():
+    """
+    Dispatcher: spawn one IMAP IDLE watcher thread per configured mailbox so every
+    employee's inbox is protected, not just one. Waits for config if none is set yet.
+    """
+    import time
+    import threading
+    started = set()
+    while True:
+        try:
+            accounts = _load_mailboxes()
+        except Exception as e:
+            logger.error("Watcher config read failed: %s", e)
+            accounts = []
+        if not accounts:
+            logger.warning("No IMAP mailboxes configured yet; retrying in 60s...")
+            time.sleep(60)
+            continue
+        for (srv, user, pw) in accounts:
+            if user in started:
+                continue
+            threading.Thread(target=_watch_mailbox, args=(srv, user, pw),
+                             daemon=True, name=f"IMAP_{user}").start()
+            started.add(user)
+            logger.info("Started IMAP watcher for mailbox: %s", user)
+        # Re-check periodically so newly-added mailboxes start without a full restart.
+        time.sleep(120)
