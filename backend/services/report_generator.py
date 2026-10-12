@@ -31,7 +31,7 @@ _T = {
         "col_lure": "Tur",
         "no_sim": "Simulyatsiya ma'lumoti yo'q.",
         "ai_note": "Tahlil local LLM tomonidan yozildi.",
-        "det_note": "Tahlil deterministik qoidalar bilan yozildi (LLM mavjud emas).",
+        "det_note": "Tahlil tizim qoidalari asosida (ma'lumotga asoslangan) tayyorlandi.",
     },
     "ru": {
         "title": "ThreatEye — Отчёт по безопасности и фишингу",
@@ -50,7 +50,7 @@ _T = {
         "col_lure": "Тип",
         "no_sim": "Нет данных симуляции.",
         "ai_note": "Анализ подготовлен локальной LLM.",
-        "det_note": "Анализ подготовлен детерминированными правилами (LLM недоступна).",
+        "det_note": "Анализ подготовлен на основе правил (по данным симуляции).",
     },
     "en": {
         "title": "ThreatEye — Security & Phishing Report",
@@ -69,7 +69,7 @@ _T = {
         "col_lure": "Lure",
         "no_sim": "No simulation data available.",
         "ai_note": "Analysis written by the local LLM.",
-        "det_note": "Analysis written by deterministic rules (no LLM available).",
+        "det_note": "Analysis generated from data-driven rules.",
     },
 }
 
