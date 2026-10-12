@@ -31,7 +31,9 @@ _GOPHISH_VARS = {
     "URL", "FirstName", "LastName", "Email", "Position", "From",
     "TrackingURL", "Tracker", "RId", "BaseURL",
 }
-_TPL_ACTION_RE = re.compile(r"\{\{\s*(.*?)\s*\}\}", re.S)
+# No "\s*" around the capture: the leading/trailing whitespace would overlap with
+# .*? and cause polynomial backtracking. _protect() trims the capture instead.
+_TPL_ACTION_RE = re.compile(r"\{\{(.*?)\}\}", re.S)
 
 
 def _sanitize_gophish_tpl(s: str) -> str:

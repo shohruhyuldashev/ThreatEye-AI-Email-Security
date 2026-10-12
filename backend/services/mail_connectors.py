@@ -148,7 +148,7 @@ def _m365_token(cfg: dict) -> str | None:
             timeout=10)
         return r.json().get("access_token") if r.ok else None
     except Exception as e:
-        logger.warning("M365 token error: %s", e)
+        logger.warning("M365 token error: %s", type(e).__name__)
         return None
 
 
@@ -188,7 +188,7 @@ def poll_m365_once() -> int:
                         "$select": "id,subject,from,toRecipients,bodyPreview,body,internetMessageHeaders"},
                 timeout=20)
             if not r.ok:
-                logger.warning("M365 fetch %s: HTTP %s %s", mbx, r.status_code, r.text[:150])
+                logger.warning("M365 fetch %s: HTTP %s", mbx, r.status_code)
                 continue
             for msg in r.json().get("value", []):
                 mid = msg.get("id")

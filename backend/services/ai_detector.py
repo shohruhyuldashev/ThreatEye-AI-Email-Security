@@ -152,17 +152,26 @@ def layer1_heuristics(text: str, urls: list) -> tuple:
         score += 20
 
     # Anchor-text vs href mismatch: a link whose visible text names one domain but
-    # whose href points at another is a classic phishing disguise.
-    for m in re.finditer(r'<a\b[^>]*href\s*=\s*["\']([^"\']+)["\'][^>]*>(.*?)</a>', text, re.I | re.S):
-        href, shown = m.group(1), re.sub(r'<[^>]+>', '', m.group(2))
-        href_dom = tld_extract(href)
-        shown_m = re.search(r'([A-Za-z0-9-]+\.)+[A-Za-z]{2,}', shown)
-        if href_dom.domain and shown_m:
-            shown_dom = tld_extract(shown_m.group(0))
-            if shown_dom.domain and (shown_dom.domain, shown_dom.suffix) != (href_dom.domain, href_dom.suffix):
-                features["anchor_href_mismatch"] = True
-                score += 35
-                break
+    # whose href points at another is a classic phishing disguise. Written without
+    # backtracking regexes (bounded tag scan + plain string ops) to avoid ReDoS.
+    for m in re.finditer(r'<a\s[^>]{0,2000}?>(.*?)</a>', text[:200000], re.I | re.S):
+        href_m = re.search(r'href\s*=\s*["\']([^"\']+)["\']', m.group(0))
+        if not href_m:
+            continue
+        href_dom = tld_extract(href_m.group(1))
+        if not href_dom.domain:
+            continue
+        shown = re.sub(r'<[^>]+>', '', m.group(1))
+        for word in shown.split():
+            w = word.strip('.,;:!?()[]{}<>"\'').lower()
+            if '.' in w and not w.startswith('.'):
+                sd = tld_extract(w)
+                if sd.domain and sd.suffix and (sd.domain, sd.suffix) != (href_dom.domain, href_dom.suffix):
+                    features["anchor_href_mismatch"] = True
+                    score += 35
+                    break
+        if features.get("anchor_href_mismatch"):
+            break
 
     for url in urls:
         ext = tld_extract(url)
@@ -424,7 +433,9 @@ def detect_prompt_injection(text: str) -> tuple[int, dict]:
 
 def _email_domain(addr: str) -> str:
     """Registered domain of an email address (or empty)."""
-    m = re.search(r'[\w.%+-]+@([\w.-]+)', addr or '')
+    # Local part excludes '@' and whitespace (no overlap with the domain class), so
+    # the match is linear — avoids polynomial backtracking on adversarial input.
+    m = re.search(r'[^@\s]+@([\w.-]+)', addr or '')
     if not m:
         return ''
     ext = tld_extract(m.group(1))

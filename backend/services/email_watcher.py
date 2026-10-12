@@ -254,7 +254,9 @@ def _acquire_single_watcher_slot():
     # 2) File lock (single-host, multi-worker safe).
     try:
         import fcntl
-        f = open("/tmp/threateye_watcher.lock", "w")
+        import tempfile
+        _lock_path = os.path.join(tempfile.gettempdir(), "threateye_watcher.lock")
+        f = open(_lock_path, "w")  # noqa: shared single-watcher lock, not sensitive
         fcntl.flock(f.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         f.write(owner); f.flush()
         logger.info("Acquired watcher slot via file lock (%s).", owner)
