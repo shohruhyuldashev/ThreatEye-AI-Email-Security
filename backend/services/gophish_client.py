@@ -22,6 +22,43 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 SENDING_PROFILE_NAME = "ThreatEye Sim SMTP"
+
+# GoPhish renders templates with Go's text/template, so any stray "{{...}}" the LLM
+# writes (it sometimes emits placeholder-looking text) breaks template compilation
+# with "unexpected unclosed action". Keep only the real GoPhish variables and
+# neutralise everything else.
+_GOPHISH_VARS = {
+    "URL", "FirstName", "LastName", "Email", "Position", "From",
+    "TrackingURL", "Tracker", "RId", "BaseURL",
+}
+_TPL_ACTION_RE = re.compile(r"\{\{\s*(.*?)\s*\}\}", re.S)
+
+
+def _sanitize_gophish_tpl(s: str) -> str:
+    """
+    Strip LLM-produced template actions, keeping only valid GoPhish variables.
+    Handles both complete "{{...}}" actions and stray/unclosed "{{" that would
+    otherwise fail Go's template parser ("unexpected unclosed action").
+    """
+    if not s:
+        return s
+
+    protected: dict[str, str] = {}
+
+    def _protect(m):
+        inner = m.group(1).strip()
+        if inner.startswith(".") and inner[1:] in _GOPHISH_VARS:
+            key = f"\x00{len(protected)}\x00"
+            protected[key] = "{{" + inner + "}}"
+            return key
+        return ""  # drop any other complete action
+
+    s = _TPL_ACTION_RE.sub(_protect, s)
+    # Neutralise any leftover stray braces (unclosed actions).
+    s = s.replace("{{", "").replace("}}", "")
+    for key, val in protected.items():
+        s = s.replace(key, val)
+    return s
 LANDING_PAGE_NAME = "ThreatEye Sim Landing"
 
 DEFAULT_LANDING_HTML = (
@@ -139,7 +176,7 @@ def create_campaign_landing_page(client, name: str, html: str, cfg: dict):
     """
     page = Page(
         name=name,
-        html=html or cfg["landing_html"],
+        html=_sanitize_gophish_tpl(html or cfg["landing_html"]),
         capture_credentials=True,
         capture_passwords=True,
         # Send the user on to the real brand after the exercise so the lure is not a
@@ -184,13 +221,13 @@ def launch_campaign(targets: list, email_data: dict, campaign_name: str, cfg: di
         ]
         group = client.groups.post(group)
 
-        html = email_data.get("body_html") or f"<p>{email_data.get('body_text', '')}</p>"
+        html = _sanitize_gophish_tpl(email_data.get("body_html") or f"<p>{email_data.get('body_text', '')}</p>")
         if "{{.URL}}" not in html:
             html += '<p><a href="{{.URL}}">Click here</a></p>'
         template = Template(
             name=f"{campaign_name}-tpl-{suffix}",
-            subject=email_data.get("subject", "Important Notice"),
-            text=email_data.get("body_text", "Please review: {{.URL}}"),
+            subject=_sanitize_gophish_tpl(email_data.get("subject", "Important Notice")),
+            text=_sanitize_gophish_tpl(email_data.get("body_text", "Please review: {{.URL}}")) or "Please review: {{.URL}}",
             html=html,
         )
         template = client.templates.post(template)
