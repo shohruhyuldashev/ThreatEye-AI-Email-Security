@@ -56,7 +56,7 @@ def _extract_auth_metadata(msg) -> dict:
     }
 
 
-def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
+def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS, organization_id=1):
     """
     Watch ONE mailbox over IMAP IDLE and route new mail through the AI detector,
     quarantining phishing. Reconnects on error. Runs in its own daemon thread so
@@ -149,7 +149,7 @@ def _watch_mailbox(IMAP_SERVER, IMAP_USER, IMAP_PASS):
                             analysis = analyze_email_hybrid(content_to_analyze, metadata, user_context)
                             result = persist_detection(
                                 c,
-                                organization_id=1,
+                                organization_id=organization_id,
                                 sender=msg.from_,
                                 subject=msg.subject,
                                 recipient=recipient,
@@ -211,11 +211,11 @@ def _load_mailboxes():
         try:
             for a in json.loads(raw):
                 if a.get("user") and a.get("pass"):
-                    accounts.append((a.get("server") or server, a["user"], a["pass"]))
+                    accounts.append((a.get("server") or server, a["user"], a["pass"], int(a.get("org", 1) or 1)))
         except Exception as e:
             logger.error("Invalid imap_accounts JSON: %s", e)
     if not accounts and s.get("imap_user") and s.get("imap_pass"):
-        accounts.append((server, s["imap_user"], s["imap_pass"]))
+        accounts.append((server, s["imap_user"], s["imap_pass"], 1))
     return accounts
 
 
@@ -299,12 +299,14 @@ def start_email_watcher():
             logger.warning("No IMAP mailboxes configured yet; retrying in 60s...")
             time.sleep(60)
             continue
-        for (srv, user, pw) in accounts:
+        for acct in accounts:
+            srv, user, pw = acct[0], acct[1], acct[2]
+            org = acct[3] if len(acct) > 3 else 1
             if user in started:
                 continue
-            threading.Thread(target=_watch_mailbox, args=(srv, user, pw),
+            threading.Thread(target=_watch_mailbox, args=(srv, user, pw, org),
                              daemon=True, name=f"IMAP_{user}").start()
             started.add(user)
-            logger.info("Started IMAP watcher for mailbox: %s", user)
+            logger.info("Started IMAP watcher for mailbox: %s (org %s)", user, org)
         # Re-check periodically so newly-added mailboxes start without a full restart.
         time.sleep(120)
