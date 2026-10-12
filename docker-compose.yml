@@ -124,6 +124,9 @@ services:
       - IMAP_ALLOW_INSECURE=${IMAP_ALLOW_INSECURE:-0}
       # Only the primary worker runs the IMAP watcher (avoids duplicate processing).
       - RUN_EMAIL_WATCHER=${RUN_EMAIL_WATCHER:-1}
+      # Async ingestion: /api/v1/emails returns 202 immediately and the verdict is
+      # computed by a queue consumer, so a gateway never blocks on the LLM.
+      - INGEST_ASYNC=${INGEST_ASYNC:-1}
     depends_on:
       gophish:
         condition: service_started

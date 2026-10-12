@@ -297,6 +297,14 @@ def start_email_watcher():
     except Exception as e:
         logger.warning("Could not start cloud mail connectors: %s", e)
 
+    # Async ingestion consumer (API /v1/emails enqueues here when INGEST_ASYNC is on).
+    try:
+        from framework.jobqueue import async_enabled, consume_ingest_queue
+        if async_enabled():
+            threading.Thread(target=consume_ingest_queue, daemon=True, name="IngestQueueConsumer").start()
+    except Exception as e:
+        logger.warning("Could not start ingest queue consumer: %s", e)
+
     started = set()
     while True:
         try:

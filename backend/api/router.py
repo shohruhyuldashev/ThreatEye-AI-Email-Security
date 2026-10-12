@@ -1172,49 +1172,50 @@ def revoke_api_key(key_id: int, _auth: dict = Depends(require_role("admin"))):
 
 # ------------------------------- Machine ingestion API --------------------------
 @router.post("/v1/emails")
-def ingest_email(req: IngestEmailRequest, _key: dict = Depends(require_api_key)):
+def ingest_email(req: IngestEmailRequest, response: Response, _key: dict = Depends(require_api_key)):
     """
     Programmatic email ingestion for gateways/connectors, authenticated by API key
     and scoped to the key's tenant. Runs the full hybrid detection pipeline.
+
+    With INGEST_ASYNC on (recommended for production), the email is queued and a 202
+    with a job id is returned immediately so the caller never blocks on the LLM;
+    poll GET /api/v1/emails/jobs/{job_id} for the verdict. Otherwise it runs
+    synchronously and returns the verdict directly.
     """
     _check_ingest_rate_limit(_key["organization_id"], _key.get("id"))
-    from services.ingest import persist_detection
+    from framework.jobqueue import async_enabled, enqueue_email, process_email_payload
 
-    content = f"Subject: {req.subject}\nBody: {req.body}"
-    metadata = {"spf": req.spf, "dkim": req.dkim, "dmarc": req.dmarc,
-                "sender": req.sender, "subject": req.subject, "reply_to": req.reply_to}
-    analysis = analyze_email_hybrid(content, metadata)
+    payload = {
+        "organization_id": _key["organization_id"],
+        "sender": req.sender, "subject": req.subject, "body": req.body,
+        "recipient": req.recipient, "reply_to": req.reply_to,
+        "spf": req.spf, "dkim": req.dkim, "dmarc": req.dmarc,
+        "source": f"api:{_key.get('api_key_name', 'key')}",
+    }
 
-    conn = get_db_connection()
-    c = conn.cursor()
+    if async_enabled():
+        job_id = enqueue_email(payload)
+        if job_id:
+            response.status_code = 202
+            return {"status": "queued", "job_id": job_id,
+                    "poll": f"/api/v1/emails/jobs/{job_id}"}
+        # Redis unavailable → fall through to synchronous processing.
+
     try:
-        result = persist_detection(
-            c,
-            organization_id=_key["organization_id"],
-            sender=req.sender,
-            subject=req.subject,
-            recipient=req.recipient,
-            content=content,
-            analysis=analysis,
-            attachments=[],
-            source=f"api:{_key.get('api_key_name', 'key')}",
-        )
-        conn.commit()
+        return process_email_payload(payload)
     except Exception as e:
-        conn.rollback()
-        conn.close()
         logger.error(f"Ingestion failed: {e}")
         raise HTTPException(status_code=500, detail="Ingestion failed")
-    conn.close()
-    return {
-        "status": "success",
-        "email_id": result["email_id"],
-        "verdict": result["status"],
-        "threat_type": result["threat_type"],
-        "risk_score": result["phishing_score"],
-        "is_threat": result["is_threat"],
-        "recommended_action": result["recommended_action"],
-    }
+
+
+@router.get("/v1/emails/jobs/{job_id}")
+def ingest_job_status(job_id: str, _key: dict = Depends(require_api_key)):
+    """Poll an async ingestion job: queued | processing | success | failed."""
+    from framework.jobqueue import get_result
+    res = get_result(job_id)
+    if res is None:
+        raise HTTPException(status_code=404, detail="Unknown or expired job id")
+    return res
 
 @router.get("/settings")
 def get_settings(_auth: dict = Depends(require_auth)):
