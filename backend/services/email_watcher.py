@@ -288,6 +288,15 @@ def start_email_watcher():
                 _logged_wait = True
             time.sleep(20)
 
+    # This process owns the single-watcher slot: also run the cloud mail connectors
+    # (Microsoft 365 / Google Workspace) here, so cloud mailboxes are protected too
+    # and never double-processed.
+    try:
+        from services.mail_connectors import run_mail_connectors
+        threading.Thread(target=run_mail_connectors, daemon=True, name="CloudMailConnectors").start()
+    except Exception as e:
+        logger.warning("Could not start cloud mail connectors: %s", e)
+
     started = set()
     while True:
         try:
