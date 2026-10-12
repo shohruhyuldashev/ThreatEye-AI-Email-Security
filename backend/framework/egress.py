@@ -134,7 +134,11 @@ def is_allowed(target: str) -> tuple[bool, str]:
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as exc:
-        return True, f"DNS resolution failed ({exc}); deferring to connect"
+        # Fail closed: if we cannot resolve the host we cannot prove it is safe, so
+        # deny by default (set EGRESS_ALLOW_ON_DNS_FAIL=1 to defer to the connect).
+        if os.getenv("EGRESS_ALLOW_ON_DNS_FAIL", "0").lower() in ("1", "true", "yes", "on"):
+            return True, f"DNS resolution failed ({exc}); deferring to connect"
+        return False, f"DNS resolution failed ({exc}); denied (fail-closed)"
 
     addrs = {info[4][0] for info in infos}
     for addr in addrs:
