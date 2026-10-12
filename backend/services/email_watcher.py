@@ -51,6 +51,8 @@ def _extract_auth_metadata(msg) -> dict:
         "dkim": verdict("dkim"),
         "dmarc": verdict("dmarc"),
         "reply_to_mismatch": reply_to_mismatch,
+        "sender": from_addr,
+        "reply_to": reply_to,
     }
 
 

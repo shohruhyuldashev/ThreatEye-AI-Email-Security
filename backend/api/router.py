@@ -174,6 +174,7 @@ class IngestEmailRequest(BaseModel):
     subject: str = ""
     body: str = ""
     recipient: str = "unknown"
+    reply_to: str = ""
     spf: str = "unknown"
     dkim: str = "unknown"
     dmarc: str = "unknown"
@@ -1175,7 +1176,8 @@ def ingest_email(req: IngestEmailRequest, _key: dict = Depends(require_api_key))
     from services.ingest import persist_detection
 
     content = f"Subject: {req.subject}\nBody: {req.body}"
-    metadata = {"spf": req.spf, "dkim": req.dkim, "dmarc": req.dmarc}
+    metadata = {"spf": req.spf, "dkim": req.dkim, "dmarc": req.dmarc,
+                "sender": req.sender, "subject": req.subject, "reply_to": req.reply_to}
     analysis = analyze_email_hybrid(content, metadata)
 
     conn = get_db_connection()

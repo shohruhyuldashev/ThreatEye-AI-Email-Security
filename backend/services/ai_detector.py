@@ -96,8 +96,21 @@ PROMPT_INJECTION_PATTERNS = [
 BEC_KEYWORDS = [
     'wire transfer', 'bank details', 'payment request', 'invoice attached',
     'gift card', 'confidential', 'do not tell', 'ceo', 'cfo',
-    'change of banking', 'ach', 'swift', 'urgent payment'
+    'change of banking', 'ach', 'swift', 'urgent payment',
+    # new-account / changed-beneficiary fraud (the core of vendor/wire BEC)
+    'new account', 'new receiving', 'new beneficiary', 'account changed',
+    'updated bank', 'banking details', 'remittance', 'iban', 'beneficiary',
+    'receiving account', 'release payment', 'process the payment', 'balance request',
+    # secrecy / pressure framing
+    'do not loop', "don't loop", 'do not call', 'keep this', 'between us',
+    'pre-disclosure', 'strictly confidential', 'shareholding sensitive',
+    'email only', 'in a meeting', 'confirm by reply', 'in flight',
 ]
+# Phrases that frame payment pressure / secrecy — count extra toward BEC.
+_BEC_SECRECY = ['do not loop', "don't loop", 'do not call', 'email only', 'keep this',
+                'between us', 'pre-disclosure', 'strictly confidential', 'confidential']
+_BEC_NEWACCT = ['new account', 'new receiving', 'new beneficiary', 'account changed',
+                'updated bank', 'changed this morning', 'receiving account', 'new vendor']
 CACHE_TTL_DAYS = int(os.getenv("DOMAIN_INTEL_CACHE_TTL_DAYS", "7"))
 
 def extract_urls(text: str) -> list:
@@ -409,19 +422,59 @@ def detect_prompt_injection(text: str) -> tuple[int, dict]:
         "prompt_injection_patterns": matches[:5]
     }
 
+def _email_domain(addr: str) -> str:
+    """Registered domain of an email address (or empty)."""
+    m = re.search(r'[\w.%+-]+@([\w.-]+)', addr or '')
+    if not m:
+        return ''
+    ext = tld_extract(m.group(1))
+    return f"{ext.domain}.{ext.suffix}".lower() if ext.domain else m.group(1).lower()
+
+
 def detect_bec_signals(text: str, metadata: dict | None = None) -> tuple[int, dict]:
     metadata = metadata or {}
     text_lower = text.lower()
     found = [kw for kw in BEC_KEYWORDS if kw in text_lower]
-    score = min(100, len(found) * 14)
-    if metadata.get("reply_to_mismatch"):
-        score += 20
-    if re.search(r'\b(invoice|payment|wire|bank)\b', text_lower) and re.search(r'\b(today|urgent|immediately|asap)\b', text_lower):
+    # Keyword presence alone stays below the quarantine bar (legit invoices use the
+    # same words); the escalation comes from the decisive signals below (reply-to
+    # mismatch/lookalike, a new/changed receiving account, secrecy framing).
+    score = min(45, len(found) * 7)
+
+    # Reply-To / From domain mismatch — the signature move of display-name/reply-to
+    # BEC (the From looks legit and passes auth; replies are quietly redirected to a
+    # lookalike). Compute it here from the headers, don't wait for a pre-set flag.
+    from_dom = _email_domain(metadata.get("sender", "") or metadata.get("from", ""))
+    reply_dom = _email_domain(metadata.get("reply_to", "") or metadata.get("reply-to", ""))
+    reply_to_mismatch = bool(metadata.get("reply_to_mismatch"))
+    reply_to_lookalike = False
+    if from_dom and reply_dom and from_dom != reply_dom:
+        reply_to_mismatch = True
+        # A reply-to that is a near-variant of the From domain (northbridge-cap.com
+        # vs northbridge-cap-cfo.com) is a very strong BEC indicator.
+        a, b = from_dom.split('.')[0], reply_dom.split('.')[0]
+        if a and b and (a in b or b in a or normalize_confusables(a) == normalize_confusables(b)):
+            reply_to_lookalike = True
+    if reply_to_mismatch:
         score += 25
+    if reply_to_lookalike:
+        score += 25
+
+    # Payment/finance request + urgency.
+    if re.search(r'\b(invoice|payment|wire|bank|remittance|iban|swift|funds|transfer)\b', text_lower) and \
+       re.search(r'\b(today|urgent|immediately|asap|before|cutoff|by friday|now)\b', text_lower):
+        score += 20
+    # New/changed receiving account — the actual fraud payload.
+    if any(p in text_lower for p in _BEC_NEWACCT):
+        score += 20
+    # Secrecy / pressure framing ("do not loop anyone else", "email only").
+    if any(p in text_lower for p in _BEC_SECRECY):
+        score += 15
+
     features = {
         "bec_detected": score >= 35,
         "bec_keywords": found[:8],
-        "reply_to_mismatch": bool(metadata.get("reply_to_mismatch", False))
+        "reply_to_mismatch": reply_to_mismatch,
+        "reply_to_lookalike": reply_to_lookalike,
     }
     return min(score, 100), features
 
@@ -869,10 +922,13 @@ def analyze_email_hybrid(email_text: str, metadata: dict | None = None, user_con
         if d_score >= 50 or h_score >= 40:
             final_score = max(final_score, 85)
 
-    # General safety net: a decisive deterministic verdict is never averaged away,
-    # even when the LLM is slow or unavailable — this is what keeps detection strong
-    # on CPU. deterministic_high already folds in corpus/domain/BEC/injection/auth.
-    final_score = max(final_score, deterministic_high)
+    # General safety net: a DECISIVE deterministic verdict is never averaged away,
+    # even when the LLM is slow or unavailable. Only apply it when the deterministic
+    # signal is actually conclusive (>=70) — a medium corpus match (e.g. a legit
+    # invoice that merely resembles a BEC pretext) must stay negotiable so the LLM
+    # can rate it down, instead of being pinned to a "suspicious" floor.
+    if deterministic_high >= 70:
+        final_score = max(final_score, deterministic_high)
 
     # Independent CPU ML signal (language-agnostic, raise-only, fail-open).
     ml_prob, ml_ok = _ml_layer(email_text, metadata, urls)
