@@ -114,10 +114,38 @@ def _check_production_secrets():
 
 
 @contextlib.asynccontextmanager
+def _wait_for_db(max_wait: int = 90):
+    """
+    Block until Postgres accepts connections. depends_on:service_healthy covers a
+    fresh `up`, but a `docker compose restart`, an auto-restart (restart: unless-
+    stopped) or a host reboot can bring the backend up before the DB is ready — so
+    we retry here instead of crashing the worker.
+    """
+    import time as _t
+    from db import get_db_connection
+    log = logging.getLogger("threateye.startup")
+    deadline = _t.time() + max_wait
+    delay = 1.0
+    while True:
+        try:
+            conn = get_db_connection()
+            conn.cursor().execute("SELECT 1")
+            conn.close()
+            return
+        except Exception as e:
+            if _t.time() >= deadline:
+                log.error("Database not reachable after %ss: %s", max_wait, e)
+                raise
+            log.warning("Database not ready yet (%s); retrying in %.0fs...", type(e).__name__, delay)
+            _t.sleep(delay)
+            delay = min(delay * 1.5, 5.0)
+
+
 async def lifespan(app: FastAPI):
     # Startup: apply schema migrations + seed multi-tenant defaults first,
     # then the detection content and background tasks.
     _check_production_secrets()
+    _wait_for_db()
     run_migrations()
     seed_saas_defaults()
     seed_default_policies()

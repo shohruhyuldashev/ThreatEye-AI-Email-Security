@@ -147,8 +147,8 @@ def _m365_token(cfg: dict) -> str | None:
                   "scope": "https://graph.microsoft.com/.default", "grant_type": "client_credentials"},
             timeout=10)
         return r.json().get("access_token") if r.ok else None
-    except Exception as e:
-        logger.warning("M365 token error: %s", type(e).__name__)  # nosemgrep
+    except Exception:
+        logger.warning("M365 token acquisition failed.")
         return None
 
 
