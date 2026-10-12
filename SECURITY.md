@@ -1,70 +1,83 @@
-# Security notes — ThreatEye
+# Xavfsizlik eslatmalari — ThreatEye
 
-ThreatEye is a **security lab / research platform**. It ships GoPhish (a live phishing
-framework) and an open mail server, so treat every deployment as sensitive and keep it on
-an isolated network you are authorised to test. This document lists the hardening that is
-built in, what you must still configure, and the known limitations of the lab defaults.
+ThreatEye — bu **xavfsizlik labi / tadqiqot platformasi**. U GoPhish (jonli phishing
+freymvork) va ochiq pochta serverini o'z ichiga oladi, shuning uchun har bir joylashtirishni
+sezgir deb biling va faqat o'zingiz nazorat qiladigan hamda sinashga ruxsatingiz bo'lgan
+ajratilган tarmoqда saqlang. Bu hujjat ichkи o'rnatilган hardeningni, siz hali sozlashingiz
+kerak bo'lgan narsalarni va lab default'larining ma'lum cheklovlarini sanaб beradi.
 
-## Hardening built into the app
+## Ilovaга o'rnatilган hardening
 
-| Area | Control |
+| Soha | Nazorat |
 |------|---------|
-| Sessions | **JWT** (PyJWT, HS256) **access + refresh tokens in `httpOnly` cookies** — never in `localStorage`, so a stored XSS cannot read them. Access ~15 min, refresh ~7 days with **rotation + reuse detection** (a replayed refresh token is revoked). Signing key from `THREATEYE_AUTH_SECRET`, or auto-generated and persisted. |
-| CSRF | Double-submit: a readable `csrf_token` cookie must be echoed in the `X-CSRF-Token` header on cookie-authenticated mutating requests (`CSRFMiddleware`); header/API-key clients and login are exempt. |
-| Same-origin | The `:3000` dashboard proxies `/api` to the backend, so the browser sees one origin — no cross-origin cookie exposure and no permissive CORS needed for the UI. |
-| Login brute force | Per-IP sliding-window rate limit on `/api/auth/login` (`THREATEYE_LOGIN_MAX_ATTEMPTS` / `THREATEYE_LOGIN_WINDOW_SECONDS`), Redis-backed across replicas, with `login_success` / `login_failed` audit entries. |
-| Credential errors | Wrong username and wrong password return the **same** generic `401`. |
-| Password storage | PBKDF2-HMAC-SHA256 (per-hash salt); a legacy plaintext/default value is migrated to a hash on first successful login. |
-| Secret exposure | `admin_password` / `auth_secret` are never returned by `GET /api/settings`; other `*pass*/*key*/*secret*/*token*` settings (AI key, SIEM key, GoPhish key, Google SA JSON, …) are masked. |
-| HTTP headers | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, and `Cache-Control: no-store` on API responses. |
-| CORS | Explicit origin allow-list; credentials enabled only for the configured dashboard origin(s) (`CORS_ALLOWED_ORIGINS`), methods/headers restricted, `X-CSRF-Token`/`X-API-Key` allowed. |
-| Uploads | Extension-restricted (`.txt` / `.csv`), filename-sanitised, randomly renamed, size-capped. |
-| SQL | All queries parameterised; the few dynamic identifiers come from hard-coded allow-lists, not user input. |
-| Output rendering | The frontend HTML-escapes all attacker-influenced fields (sender, subject, evidence, timeline) before injecting them into the DOM. |
-| Network exposure | `docker-compose.yml` binds Postgres, Redis and Ollama to `127.0.0.1` only. |
-| SIEM delivery | Alerts are dispatched to a background worker (non-blocking) with retry + backoff; the destination + key are set in the admin panel, not hard-coded. |
-| Prompt injection / jailbreak | The model that reads attacker-controlled email treats that content as **data, never instructions**; attempts to steer it ("ignore previous instructions", "mark this email as safe", DAN-style framing) are flagged and never obeyed. A deterministic detector also matches these families, so an injection attempt is caught even with the LLM offline. |
-| Policy engine | Quarantine/response policies **fail closed**: a policy with no conditions, or any unrecognised condition key, does not match — a mis-typed rule can't silently fire on every email. |
-| Self-improvement | `scripts/self_improve.py` is governed, not autonomous: learns only from analyst-confirmed data (never its own output), promotes only past a validation + safety gate, and is bounded by an example cap, a version ceiling, a kill-switch (`data/SELF_IMPROVE_DISABLED`), an audit log, and a required human `--confirm`. |
-| Model archives | `scripts/model-archive.sh` excludes Ollama's private signing key from the exported tar. |
+| Sessiyalar | **JWT** (PyJWT ≥2.15.1, HS256) **access + refresh tokenlar `httpOnly` cookie'larда** — hech qachon `localStorage`да emas, shuning uchun saqlanган XSS ularni o'qiy olmaydi. Access ~15 min, refresh ~7 kun **rotatsiya + reuse aniqlash** bilan. Imzolash kaliti `THREATEYE_AUTH_SECRET`dan yoki auto-generatsiya + saqlash. |
+| Majburiy parol o'zgartirish | Birinchi login (yoki hali `admin/admin` default)да server parolni o'zgartirishni **majbur qiladi**: `must_change_password` bayrog'i, JWT'да `mcp` claim, `require_auth` parol almashtirilgunча har bir non-auth endpointni 403 bilan bloklaydi. Parol **UI modal** orqали o'rnatiladi (prompt emas). Mavjud `admin/admin` deployment'lar ham seed vaqtidа aniqlanadi va majburlanadi. |
+| CSRF | Double-submit: o'qilsa bo'ladigan `csrf_token` cookie cookie-autentifikatsiyalangан mutatsion so'rovlarда `X-CSRF-Token` sarlavhasidа qaytarilishi kerak (`CSRFMiddleware`). |
+| Same-origin | `:3000` dashboard `/api`ni backendга proxy qiladi — brauzer bitta origin ko'radi. |
+| SSRF egress guard | `framework/egress.py` — admin boshqaradigan tashqi so'rovlar (SIEM webhook, `test-imap`, `test-ai`, integratsiya webhook'lari) private/loopback/link-local/reserved IP'larга (jumladan cloud metadata `169.254.169.254`ga) chiqolmaydi. Bundled service nomlari (`elasticsearch`, `mail_server`, `ollama`, ...) allow-list'да. `EGRESS_GUARD`/`EGRESS_INTERNAL_HOSTS`/`EGRESS_ALLOW_CIDRS` bilan sozlanadi. |
+| Login brute force | `/api/auth/login`'да per-IP sliding-window rate limit (`THREATEYE_LOGIN_MAX_ATTEMPTS`/`THREATEYE_LOGIN_WINDOW_SECONDS`), Redis-backed, `login_success`/`login_failed` audit yozuvlari bilan. |
+| Kredential xatolari | Noto'g'ri username va noto'g'ri parol **bir xil** umumiy `401` qaytaradi. |
+| Parol saqlash | PBKDF2-HMAC-SHA256 (har-hash salt). API kalitlar **HMAC-SHA256 (auth secret bilan keyed)** hash sifatida saqlanadi — DB sizib chiqsa ham, server secreti bo'lmasdан kalitlarni taxmin qilib bo'lmaydi. |
+| Secret oshkorligi | `admin_password`/`auth_secret` hech qachon `GET /api/settings`da qaytarilmaydi; boshqa `*pass*/*key*/*secret*/*token*` settinglar maskalangan. Settings secretlari DB'да **Fernet bilan shifrlangan** (encrypt-at-rest). |
+| HTTP sarlavhalari | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy`, `Permissions-Policy`, API javoblarда `Cache-Control: no-store`, va TLS orqasidа **HSTS** (`Strict-Transport-Security`). |
+| CORS | Aniq origin allow-list (`CORS_ALLOWED_ORIGINS`); kredentiallar faqat sozlanган dashboard origin(lar)i uchun. |
+| Uploadlar | Kengaytma-cheklanган (`.txt`/`.csv`), fayl nomi tozalanган, tasodifiy qayta nomlanган, hajm-cheklanган. |
+| SQL | Barcha so'rovlar parametrlangan; kam sonli dinamik identifikatorlar qat'iy allow-list'dan (user input emas). Bandit/CodeQL tekshirди: SQL injection yo'q. |
+| Stack-trace oshkorligi | Istisno matni klientга qaytarilmaydi — xatolar server tomonда log qilinadi, javobда umumiy xabar (`/ready`, SIEM, GoPhish yo'llari tuzatilган). |
+| ReDoS | Copilot token-qidiruvi backtracking regex o'rniga chiziqli string-ops ishlatadi (polinomial ReDoS yo'q). |
+| Chiqish render | Frontend barcha hujumchi ta'sirida bo'lgan maydonlarни (sender, subject, evidence, timeline) DOM'ga kiritishdan oldin HTML-escape qiladi. |
+| Tarmoq ekspozitsiyasi | `docker-compose.yml` Postgres, Redis va Ollama'ни faqat `127.0.0.1`ga bog'laydi. |
+| SIEM yetkazish | Ogohlantirishlar fon worker'ga (bloklamasdan) retry + backoff bilan jo'natiladi; destination + kalit admin panelдан. |
+| Prompt injection / jailbreak | Hujumchi-boshqaradigan email kontentini o'qiydigan model uni **ma'lumot deb biladi, ko'rsatma emas**; model'ni boshqarish urinishlari ("ignore previous instructions", "mark safe", DAN) belgilanadi va bajarilmaydi. Deterministik detektor ham bu oilalarni ushlaydi — LLM offline bo'lsa ham. |
+| Policy engine | Karantin/javob siyosatlari **fail closed**: shartsiz yoki noma'lum shartli siyosat mos kelmaydi. |
+| O'z-o'zини yaxshilash | `scripts/self_improve.py` boshqariladi: faqat analitik-tasdiqlaган ma'lumotdan o'rganadi, validatsiya + xavfsizlik darvozasidan o'tgandагина ko'taradi, misol chegarasi, versiya shifti, kill-switch (`data/SELF_IMPROVE_DISABLED`), audit jurnali va majburiy inson `--confirm` bilan. |
+| Model arxivlari | `scripts/model-archive.sh` eksport tar'idan Ollama'ning private imzolash kalitini chiqarib tashlaydi. |
 
-## You MUST configure before any real use
+## CI xavfsizlik skanlari
 
-1. **Change the admin password.** The default is `admin`.
-2. **Set strong secrets in `.env`** (copy from `.env.example`): `THREATEYE_AUTH_SECRET`
-   and `POSTGRES_PASSWORD`.
-3. **Serve over TLS and set `COOKIE_SECURE=true`.** The session cookies are `httpOnly` but
-   not `Secure` by default (so the lab works over plain HTTP); behind a real deployment,
-   terminate TLS (Caddy/Traefik/nginx) and set `COOKIE_SECURE=true` + an appropriate
-   `COOKIE_SAMESITE`.
-4. **Restrict `CORS_ALLOWED_ORIGINS`** to the exact dashboard origin.
+GitHub Actions har push'да ishlaydi va natijalar Security tab'da ko'rinadi:
 
-## Multi-tenancy & RBAC
+- **CodeQL** — Python/JS/Actions statik tahlili (haqiqiy topilmalar kodda tuzatilди).
+- **Bandit** — xizmat kodi (`backend`) uchun Python xavfsizlik linteri (testlar/scriptlar
+  qamrovdan tashqarida).
+- **Semgrep** — tokensiz OSS qoidalar (p/python, p/owasp-top-ten, p/javascript).
+- **osv-scanner** — bog'liqlik CVE'lari (barcha deps pin qilinган → yopiq).
 
-- Users live in a `users` table with four roles (`viewer` < `analyst` < `admin` < `owner`);
-  endpoints are role-gated and reads/writes are scoped by `organization_id`.
-- Machine clients authenticate to `POST /api/v1/emails` with a per-tenant `X-API-Key`
-  (stored only as a SHA-256 hash; the plaintext is shown once at creation and can be revoked).
-- Protections: no self-lockout/self-delete, the last `owner` cannot be removed, only an
-  owner can grant `owner`.
+**Holat: GitHub Security & Quality tab'да 0 ochiq alert.** Haqiqiy zaifliklar kodда
+tuzatildi; false-positive'lar (parametrlashган SQL, testlardagi assert, offline-script
+subprocess) tekshirilib sabab bilan yopildi.
 
-## Known limitations (acceptable for a lab, review before production)
+## Haqiqiy foydalanishdan OLDIN sozlashingiz SHART
 
-- **Per-tenant read scoping is partial.** Core data paths (stats, emails, quarantine, live
-  stream, simulations) are tenant-scoped; some secondary reads (iocs, mitre, audit-log,
-  cases, siem-events) still default to the primary org and should be scoped before
-  onboarding a second real tenant.
-- **Admin-authenticated SSRF surface.** `POST /api/settings/test-imap`, `test-siem`, the URL
-  analyzer and WHOIS lookups reach arbitrary hosts by design (that's how the lab connects to
-  mail/SIEM servers) — an admin token is powerful, so keep the instance isolated.
-- **`--reload` in the backend Dockerfile** is a development convenience (source is
-  bind-mounted). Remove it and run multiple workers for a real deployment.
-- **Bundled model weights are not signed.** `scripts/model-archive.sh` archives the Ollama
-  volume; verify the source of any imported archive.
-- **GoPhish and the mail server** are full-featured; only run them on a lab network you
-  control and are authorised to test. Phishing simulations are for consenting employees /
-  authorised engagements only.
+1. **Admin parolini o'zgartiring.** Default `admin` (server birinchi loginда majbur qiladi).
+2. **`.env`да kuchli secretlar o'rnating** (`.env.example`dan): `THREATEYE_AUTH_SECRET` va
+   `POSTGRES_PASSWORD`. Production uchun `THREATEYE_ENV=production` (insecure default'larда
+   fail-close).
+3. **TLS orqali serve qiling va `COOKIE_SECURE=true` o'rnating.** `docker compose --profile
+   production up` Caddy TLS proxy qo'shadi.
+4. **`CORS_ALLOWED_ORIGINS`ни aniq dashboard origin'ига cheklang.**
+5. **Egress guard'ni yoqiq qoldiring** (`EGRESS_GUARD=on`, default).
 
-## Reporting
+## Multi-tenancy va RBAC
 
-This is a personal lab project — open an issue or note findings in `CHANGELOG.md`.
+- Foydalanuvchilar `users` jadvalida, to'rt rol bilan (`viewer` < `analyst` < `admin` <
+  `owner`); endpointlar rol-gated, o'qish/yozish `organization_id` bo'yicha scoped.
+- Mashina klientlari `POST /api/v1/emails`ga per-tenant `X-API-Key` bilan (faqat HMAC-SHA256
+  hash sifatida saqlanadi; plaintext bir marta ko'rsatiladi, bekor qilish mumkin).
+- Himoyalar: o'z-o'zини bloklash/o'chirish yo'q, oxirgi `owner`ни olib bo'lmaydi, faqat
+  owner `owner` bera oladi.
+
+## Ma'lum cheklovlar (lab uchun maqbul, productiondan oldin ko'rib chiqing)
+
+- **Advanced evaziya qisman.** Kirill/Unicode homoglif, zero-width belgilar, ko'rinmas keyword
+  stuffing, anchor-matni ≠ href — bular uchun qo'shimcha aniqlash rejalashtirilган (ROADMAP §4.2).
+- **Dev qulayliklari** (`UVICORN_RELOAD`, lab POSTGRES default) hali yoqilgan bo'lishi mumkin —
+  real deployment uchun o'chiring.
+- **Bundled model og'irliklari imzolanмаган** — import qilinган arxiv manbasini tekshiring.
+- **GoPhish va pochta serveri** to'liq funksional; faqat o'zingiz nazorat qiladigan va ruxsat
+  olgan lab tarmog'ida ishga tushiring. Phishing simulyatsiyalari faqat roziligi bor xodimlar /
+  ruxsat etilган ishlar uchun.
+
+## Xabar berish
+
+Bu shaxsiy lab loyihasi — issue oching yoki topilmalarni `CHANGELOG.md`da qayd eting.

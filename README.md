@@ -1,289 +1,298 @@
-# ThreatEye — AI-Powered Email Security Platform
+# ThreatEye — AI quvvatli Email Xavfsizlik platformasi
 
-ThreatEye is a real-time phishing-detection lab where **the AI defends against AI-crafted
-attacks**. It intercepts incoming mail, scores every message with a specialised local LLM
-plus a deterministic detection stack, quarantines threats, and runs full-blown phishing
-simulations against your own staff — all self-hosted, offline-capable, and SOC-ready.
+ThreatEye — bu **real vaqtda phishing aniqlaydigan** o'zini-o'zi hostlaydigan platforma:
+bu yerda **AI, AI tomonidan yaratilgan hujumlarга qarshi himoya qiladi**. Tizim kiruvchi
+pochtani ushlaydi, har bir xatni maxsus lokal LLM va deterministik aniqlash steki bilan
+baholaydi, tahdidlarni karantinga oladi va o'z xodimlaringizga qarshi to'liq phishing
+simulyatsiyalarini o'tkazadi — hammasi offline ishlay oladi va SOC uchun tayyor.
 
-Core pieces:
+Asosiy qismlar:
 
-- **Specialised detection model** (`threateye-phish:1.3`, default) — a local Ollama model
-  derived from qwen2.5:3b, its expertise baked in (phishing, malware, code review, ATT&CK,
-  IR) with **semantic-intent reasoning**, **prompt-injection/jailbreak defence**, and two
-  output modes (prose for chat, JSON for scoring). A **multilingual 7b variant** (`2.0`,
-  English/Russian/Uzbek) is reproducible on demand. Any OpenAI-compatible provider also works.
-- **MITRE-anchored phishing corpus** (1,210 techniques) — the model's knowledge — plus a
-  **1,000,000-row labeled dataset** built from real open feeds, used to **validate**
-  (benchmark) the detector at scale, not to fine-tune it.
-- **Deterministic detection stack** — heuristics, SPF/DKIM/DMARC authentication, domain
-  intel/typosquat, BEC signals, prompt-injection guard, and a corpus matcher — so
-  detection holds when the LLM is slow or offline.
-- **CPU ML classifier** — a HashingVectorizer + SGD (log-loss) model trained on the 1M
-  labeled dataset (`scripts/train_ml_classifier.py`), an independent, language-agnostic
-  statistical signal that runs on CPU and can only raise the risk score (fail-open).
-- **Real-time analysis** on two entry points: async IMAP monitoring and a machine
-  ingestion API, streamed to the dashboard over SSE.
-- **AI-driven GoPhish simulations** — the model writes the lure *and* the credential-capture
-  landing page; GoPhish tracks who clicks and who submits (Collaborator-style).
-- **Real SIEM integration** — Elasticsearch + Kibana, ECS/OCSF export, configured from the
-  admin panel.
-- Multi-tenant RBAC, JWT-cookie sessions, adaptive learning,
-  attachment malware analysis, SOC copilot, PostgreSQL evidence store.
-
----
-
-## 🏗 Architecture
-
-```
-Incoming mail ──▶ IMAP watcher ─┐
-Gateway/API   ──▶ /api/v1/emails ┤
-                                 ▼
-                       Detection pipeline
-        heuristics · auth · domain-intel · corpus · BEC · injection
-                     · specialised LLM (when needed)
-                                 ▼
-        Verdict ──▶ Quarantine ──▶ PostgreSQL evidence (IOC/MITRE/timeline)
-                                 ├─▶ SIEM (ECS → Elasticsearch/Kibana)
-                                 └─▶ SSE ──▶ Dashboard (:3000)
-```
-
-The `:3000` dashboard serves the UI and **proxies `/api` to the backend same-origin**, so
-JWT session cookies work without CORS gymnastics.
+- **Maxsus aniqlash modeli** (`threateye-phish:1.3`, default) — `qwen2.5:3b` asosida
+  qurilgan lokal Ollama modeli, unga ekspertlik "pishirib" kiritilgan (phishing, zararli
+  dastur, kod tahlili, ATT&CK, IR) — **semantik-niyat tahlili**, **prompt-injection/jailbreak
+  himoyasi** va ikki chiqish rejimi (chat uchun matn, baholash uchun JSON) bilan.
+  **Ko'p tilli 7b variant** (`2.0`, Ingliz/Rus/O'zbek) talab bo'yicha qayta qurилади. Har
+  qanday OpenAI-moslashgan provayder ham ishlaydi. LLM **har qanday tildagi** phishingni
+  aniqlaydi va sabablarini **tanlangan tilда** (default — o'zbek) yozadi.
+- **CPU ML klassifikatori** — 1 million qatorli belgilangan dataset'да o'qitilgan
+  HashingVectorizer + SGD (log-loss) modeli (`scripts/train_ml_classifier.py`). Bu mustaqil,
+  **til-agnostik** statistik signal bo'lib, CPU'да ishlaydi va faqat xavf bahosini **ko'tara
+  oladi** (fail-open — model/sklearn yo'q bo'lsa, pipeline o'zgarmay ishlaydi).
+- **MITRE'ga asoslangan phishing korpusi** (1,210 texnika) — modelning bilimi — plus real
+  ochiq feedlardан qurilgan **1,000,000 qatorli belgilangan dataset**, detektorni katta
+  miqyosда **validatsiya** (benchmark) qilish uchun.
+- **Deterministik aniqlash steki** — evristika, SPF/DKIM/DMARC autentifikatsiyasi, domen
+  razvedkasi/typosquat (**homoglif** aniqlash, masalan `rnicrosoft`→`microsoft`), BEC
+  signallari, prompt-injection qo'riqchisi va korpus moslashtiruvchi — LLM sekin yoki offline
+  bo'lganда ham aniqlash saqlanib qoladi.
+- **Real vaqt tahlili** ikki kirish nuqtasida: async IMAP monitoring va mashina ingestion
+  API, dashboardга SSE orqali uzatiladi.
+- **AI boshqaruvidagi GoPhish simulyatsiyalari** — model lure (aldov) ham, credential-ushlovchi
+  landing sahifasini ham yozadi; GoPhish kim bosgani va kim ma'lumot kiritganini kuzatadi.
+- **AI Awareness hisoboti** — simulyatsiya natijalaridan lokal LLM **xulosa yozadi**: qaysi
+  bo'lim eng zaif, qanday phishingга aldanadi, qaysi bo'limga awareness trening kerak —
+  **PDF ko'rinishida 3 tilда** (o'zbek/rus/ingliz) eksport qilinadi.
+- **Real SIEM integratsiyasi** — Elasticsearch + Kibana, ECS/OCSF eksport, admin paneldan
+  sozlanadi.
+- Ko'p-ijarachili (multi-tenant) RBAC, JWT-cookie sessiyalar, adaptiv o'rganish, attachment
+  zararli dastur tahlili, SOC copilot, PostgreSQL dalillar ombori.
+- **Ko'p tilli interfeys** — O'zbek (asosiy) · Русский · English; til setup paytida tanlanadi.
 
 ---
 
-## 🐳 Run locally
+## 🏗 Arxitektura
+
+```
+Kiruvchi pochta ──▶ IMAP watcher ─┐
+Gateway/API     ──▶ /api/v1/emails ┤
+                                   ▼
+                        Aniqlash pipeline
+   evristika · auth · domen-razvedka · homoglif · korpus · BEC · injection
+          · CPU ML klassifikatori (til-agnostik) · maxsus LLM (asosiy)
+                                   ▼
+   Verdict ──▶ Karantin ──▶ PostgreSQL dalillar (IOC/MITRE/timeline)
+                                   ├─▶ SIEM (ECS → Elasticsearch/Kibana)
+                                   └─▶ SSE ──▶ Dashboard (:3000)
+```
+
+`:3000` dashboard UI'ni serve qiladi va **`/api`ni backendга same-origin proxy qiladi**,
+shuning uchun JWT sessiya cookie'lari CORS muammolarsiz ishlaydi.
+
+**Aniqlash qatlamlari qanday birlashadi:** LLM **asosiy** aniqlovchi (har xatга ishlaydi,
+`DETECTOR_FAST_PATH=0`). Deterministik stek va CPU ML klassifikatori — **xavfsizlik to'ri**:
+ular faqat ballni **ko'tara oladi**, hech qachon LLM tahlilini almashtirmaydi. Shu sababli
+`rnicrosoft.com` kabi aniq homoglif LLM sekin yoki offline bo'lsa ham ushlanadi.
+
+---
+
+## 🐳 Lokal ishga tushirish
 
 ```bash
-cp .env.example .env          # then edit the secrets
-docker compose up --build     # core stack
+cp .env.example .env          # keyin secretlarni tahrirlang
+docker compose up --build     # asosiy stek
 ```
 
 - **Dashboard:** http://localhost:3000
 - **Backend API:** http://localhost:8000  (health: `/health`, ready: `/ready`, metrics: `/metrics`)
 
-First login is `admin` / `admin` — the server **forces a password change before anything
-else works** (every other endpoint returns 403 until you set a new password).
+Birinchi kirish `admin` / `admin` — server **boshqa hamma narsadan oldin parolni
+o'zgartirishni majbur qiladi** (parol o'zgartirilgunча har bir boshqa endpoint 403 qaytaradi).
+Parol o'zgartirish chiroyli **UI modal** orqali bo'ladi.
 
-**Optional profiles:**
+**Ixtiyoriy profillar:**
 
 ```bash
-docker compose --profile siem up -d elasticsearch kibana   # SIEM (Kibana on :5601)
-./scripts/siem-setup.sh                                     # provision ES index + Kibana view
+docker compose --profile siem up -d elasticsearch kibana   # SIEM (Kibana :5601)
+./scripts/siem-setup.sh                                     # ES indeks + Kibana view
 docker compose --profile production up                      # Caddy TLS reverse proxy
 ```
 
 ---
 
-## 🤖 The AI: specialised model + knowledge base
+## 🤖 AI: maxsus model + ML klassifikatori + bilimlar bazasi
 
-Detection is grounded in an open-source-derived knowledge base, not guesswork.
+Aniqlash ochiq-manbali bilimlar bazasiga asoslangan, taxminга emas.
 
-- **Phishing corpus** (`data/phishing_corpus.json`, `scripts/build_phishing_corpus.py`) —
-  1,210 concrete techniques anchored on the real **MITRE ATT&CK** Enterprise phishing tree
-  (the official STIX bundle), expanded across pretext × brand × evasion × target role.
-- **Labeled dataset** (`scripts/build_dataset.py`) — up to **1,000,000 rows** (phishing +
-  benign) drawn from **Phishing.Database**, **OpenPhish**, **URLhaus** and the top-100k
-  legitimate domains. The big file is reproducible and git-ignored; a sample + stats are
-  committed.
-- **Specialised model** (`scripts/build_phish_model.py`) — builds `threateye-phish:1.3`
-  in Ollama: an expert system brief distilled from the corpus, classifier-tuned decoding,
-  and worked examples, **baked into the model** (Ollama Modelfile) — prompt/parameter
-  specialisation, **not gradient fine-tuning**. It scores emails as JSON and answers analyst
-  questions as prose. A 7b multilingual variant (`--base qwen2.5:7b --name threateye-phish:2.0`)
-  adds English/Russian/Uzbek chat when you want it.
-- **Validated at scale** — across the 1M dataset the deterministic layer alone reaches
-  **precision 99.9%, recall 86%** (false-positive rate ~0.07%). By default the LLM runs on
-  every email (`DETECTOR_FAST_PATH=0`) and the deterministic checks are a safety net that can
-  only raise the score; set `DETECTOR_FAST_PATH=1` to let clearly-decisive cases skip the LLM
-  for speed on CPU.
-- **Model persistence** — `scripts/model-archive.sh export|import` (and `MODEL.md`) archive
-  the trained model as a tar (the Ollama volume, private key excluded) so it survives
-  `down -v` / a host rebuild / an offline move. Large archives can be `split` for upload.
-- **Governed self-improvement** (`scripts/self_improve.py`) — learns only from
-  analyst-confirmed verdicts, promotes a candidate only past a validation + safety gate, and
-  is bounded by an example cap, a version ceiling, a kill-switch and an audit log (human
-  `--confirm` required). Never autonomous.
+- **Phishing korpusi** (`data/phishing_corpus.json`) — real **MITRE ATT&CK** Enterprise
+  phishing daraxtiga asoslangan 1,210 ta aniq texnika, pretext × brend × evaziya × rol
+  bo'yicha kengaytirilgan.
+- **Belgilangan dataset** (`scripts/build_dataset.py`) — **Phishing.Database**, **OpenPhish**,
+  **URLhaus** va top-100k qonuniy domenlardan **1,000,000 qatorgacha**. Katta fayl
+  git-ignored va qayta ishlab chiqariladi; namuna + statistika commit qilingan.
+- **Maxsus model** (`scripts/build_phish_model.py`) — Ollama'да `threateye-phish:1.3`ni
+  quradi: korpusdан distillanган ekspert brifi modelга "pishirilgan" (Ollama Modelfile) —
+  gradient fine-tuning emas, prompt/parametr maxsuslashtiruvi. Tafsilotlar: [MODEL.md](MODEL.md).
+- **CPU ML klassifikatori** (`scripts/train_ml_classifier.py` → `backend/services/ml_classifier.py`)
+  — 1M dataset'да daqiqalarда (GPU'siz) o'qitiladi; aniqlash pipelinega **uchinchi qatlam**
+  sifatida ulanadi. 2MB artefakt (`backend/models/ml_phish.joblib`) repozitoriyда.
+- **Katta miqyosда validatsiya** — 1M dataset bo'yicha deterministik qatlam yolg'iz
+  **precision 99.9%, recall 86%** ga yetadi (FPR ~0.07%).
+- **Modelni saqlash** — `scripts/model-archive.sh export|import` o'qitilган modelni tar
+  sifatida arxivlaydi (`down -v` / host qayta qurish / offline ko'chirishdan omon qoladi).
+- **Boshqariladigan o'z-o'zини yaxshilash** (`scripts/self_improve.py`) — faqat
+  analitik-tasdiqlaган verdictlardан o'rganadi, nomzodni validatsiya + xavfsizlik darvozasidan
+  o'tgandагина ko'taradi, misol chegarasi, versiya shifti, kill-switch va audit jurnali bilan
+  cheklangan (inson `--confirm` majburiy). Hech qachon avtonom emas.
 
-**Closed loop (the project's goal):** the AI generates a phishing lure + landing page, and
-the AI detector catches it — verified live (generated W-2 lure, T1566.001 → quarantined).
-
-Configure the provider from **Settings → AI Engine** (OpenAI / Anthropic / Groq /
-Ollama-local / Custom, model, API key, base URL); **Test AI Connection** runs a real
-completion. Talk to the model directly:
+Provayderni **Settings → AI Engine**dan sozlang (OpenAI / Anthropic / Groq / Ollama-lokal /
+Custom). Model bilan to'g'ridan-to'g'ri gaplashish:
 
 ```bash
 docker exec -it ollama ollama run threateye-phish:1.3
 ```
 
-See [MODEL.md](MODEL.md) for where the model runs, how to rebuild, archive, and self-improve it.
+---
+
+## 🔐 Autentifikatsiya va sessiyalar
+
+- **JWT** (PyJWT ≥2.15.1, HS256) **access + refresh tokenlar httpOnly cookie'larда** —
+  `localStorage`да token yo'q. Access ~15 min, refresh ~7 kun rotatsiya + reuse aniqlash bilan.
+- **Birinchi loginда majburiy parol o'zgartirish** — `admin/admin` default endi ishlamaydi:
+  `must_change_password` bayrog'i, JWT'да `mcp` claim, `require_auth` parol almashtirilgunча
+  har bir non-auth endpointni 403 bilan bloklaydi. UI modal orqали (prompt emas).
+- **CSRF** double-submit: o'qilsa bo'ladigan `csrf_token` cookie mutatsion so'rovlarда
+  `X-CSRF-Token`да qaytariladi.
+- **SSRF egress guard** (`framework/egress.py`) — admin boshqaradigan tashqi so'rovlar
+  (SIEM webhook, test-imap, test-ai, integratsiya webhook'lari) private/loopback/link-local/
+  reserved IP'larга (jumladan cloud metadata `169.254.169.254`ga) chiqolmaydi; bundled
+  service nomlari allow-list'да. `EGRESS_*` env bilan sozlanadi.
+- Login rate-limiting (per-IP, Redis), PBKDF2-HMAC-SHA256 parol saqlash, API kalitlar uchun
+  HMAC-SHA256 (keyed) hash, umumiy 401, maskalangan secretlar. Qarang: [SECURITY.md](SECURITY.md).
 
 ---
 
-## 🔐 Authentication & sessions
+## 👥 Foydalanuvchilar, rollar va ingestion API
 
-- **JWT** (PyJWT, HS256) **access + refresh tokens in httpOnly cookies** — no tokens in
-  `localStorage`. Access token ~15 min, refresh ~7 days with rotation and reuse detection.
-- **CSRF** double-submit: a readable `csrf_token` cookie is echoed in `X-CSRF-Token` on
-  mutating requests; cookie-authed mutations are verified.
-- **Same-origin** via the `:3000` nginx `/api` proxy, so the session is seamless — no
-  re-login on navigation.
-- Login rate-limiting (per-IP sliding window, Redis-backed), PBKDF2-HMAC-SHA256 password
-  storage, generic 401s, masked secrets. See [SECURITY.md](SECURITY.md).
+Multi-tenant + RBAC; **Team & Access**da foydalanuvchilar va API kalitlarni boshqaring (admin).
 
----
+**Rollar:** `viewer` → `analyst` → `admin` → `owner`
 
-## 👥 Users, roles & ingestion API
-
-Multi-tenant with RBAC; manage users and API keys in **Team & Access** (admin only).
-
-**Roles:** `viewer` → `analyst` → `admin` → `owner`
-- `viewer` — read-only dashboards
-- `analyst` — + SOC actions (release/delete/review, empty quarantine, cases, run simulations)
-- `admin` — + settings, policies, IMAP test, user & API-key management
-- `owner` — + grant/revoke `owner`
-
-**Machine ingestion** — feed mail from a gateway/connector with a per-tenant API key:
+**Mashina ingestion** — gateway/konnektordan per-tenant API kalit bilan pochta berish:
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/emails \
   -H "X-API-Key: tek_xxxxxxxx" -H "Content-Type: application/json" \
-  -d '{
-    "sender": "it@0ffice365-reset.com",
-    "subject": "Mandatory password reset",
-    "body": "Reset at http://0ffice365-reset.com/login and enter your password.",
-    "recipient": "finance@corp.com",
-    "spf": "fail", "dkim": "fail", "dmarc": "fail"
-  }'
+  -d '{"sender":"it@0ffice365-reset.com","subject":"Mandatory password reset",
+       "body":"Reset at http://0ffice365-reset.com/login and enter your password.",
+       "recipient":"finance@corp.com","spf":"fail","dkim":"fail","dmarc":"fail"}'
 ```
 
-Returns the verdict, risk score, threat type, and recommended action; the message is
-persisted with full IOC/MITRE/timeline evidence, exactly like watcher-ingested mail.
-Schema changes apply at startup via an ordered SQL migration runner (`backend/migrations/`).
+Verdict, xavf bahosi, tahdid turi va tavsiya qilingan amalni qaytaradi; xabar to'liq
+IOC/MITRE/timeline dalili bilan saqlanadi. Sxema o'zgarishlari startda tartibli SQL
+migratsiya runner orqali qo'llanadi (`backend/migrations/`).
 
 ---
 
-## 🛡 SOC & Blue-Team framework
+## 🛡 SOC & Blue-Team
 
-The **SOC Center** view (and its APIs):
+**SOC Center** (va uning API'lari): Triage queue (`GET /api/triage`), SLA & metrikalar
+(MTTD/MTTR), Threat intel (per-tenant blocklist/allowlist), ATT&CK coverage, Response actions
+(`notify`/`ticket`/`clawback`/`block_ioc`), Phishing korpus API.
 
-- **Triage queue** (`GET /api/triage`) — prioritised P1/P2/P3 worklist with one-click response.
-- **SLA & metrics** (`GET /api/soc/metrics`) — open cases, SLA breaches, **MTTD/MTTR**
-  (Critical 60m / High 4h / Medium 24h / Low 72h).
-- **Threat intel** (`/api/intel/indicators`) — per-tenant blocklist/allowlist; a blocklisted
-  IOC forces quarantine. Promote a confirmed email's IOCs with `block_ioc`.
-- **ATT&CK coverage** (`GET /api/attack/coverage`) — defended vs observed, by tactic. Rules
-  are tagged with ATT&CK techniques; the loader reads native `.yaml` and Sigma-style `.yml`.
-- **Response actions** (`POST /api/emails/{id}/remediate`) — `notify`, `ticket`, `clawback`,
-  `block_ioc`, recorded in `remediation_actions`.
-- **Phishing corpus API** — `GET /api/corpus/stats`, `GET /api/corpus/techniques`.
+**Alert filtrlash:** qo'ng'iroq (bell) faqat **suspicious + karantinга olinган** pochtani
+ko'rsatadi; yetkazilган past-xavfli pochta alert qilinmaydi, lekin baribar SIEM'ga yoziladi
+(`ALERT_SUSPICIOUS_MIN_SCORE`).
 
 ---
 
-## 🔌 SIEM integration (Elasticsearch + Kibana)
+## 🔌 SIEM integratsiyasi (Elasticsearch + Kibana)
 
-Quarantine alerts are forwarded to your SIEM in real time, **non-blocking**, with retry and
-a **replay** for failed deliveries — all configured in **Settings → Integrations**.
+Karantin ogohlantirishlari real vaqtда, **bloklamasdan**, retry va **replay** bilan SIEM'ga
+uzatiladi — hammasi **Settings → Integrations**da sozlanadi.
 
 ```bash
 docker compose --profile siem up -d elasticsearch kibana
-./scripts/siem-setup.sh          # ECS index template + Kibana data view
+./scripts/siem-setup.sh          # ECS indeks shabloni + Kibana data view
 ```
 
-Then set **Webhook URL** `http://elasticsearch:9200/threateye-alerts/_doc`, **Format** ECS.
-Alerts are searchable in Kibana (:5601) → Discover → *ThreatEye Alerts*. Formats: `raw` /
-**ECS** (Elastic) / **OCSF**. `siem_min_score` also forwards delivered-but-suspicious mail;
-`POST /api/siem-events/replay` re-sends failed deliveries.
+Keyin **Webhook URL** `http://elasticsearch:9200/threateye-alerts/_doc`, **Format** ECS.
+Formatlar: `raw` / **ECS** (Elastic) / **OCSF**. `siem_min_score` yetkazilган-lekin-shubhali
+pochtani ham uzatadi; `POST /api/siem-events/replay` muvaffaqiyatsiz yetkazishlarни qayta yuboradi.
 
 ---
 
-## 🎣 Phishing simulation (GoPhish) — fully AI-driven
+## 🎣 Phishing simulyatsiyasi (GoPhish) — to'liq AI boshqaruvида
 
-Test which employees fall for phishing, by department — with the AI running the whole
-campaign.
+Xodimlar qaysi phishingга aldanishini bo'lim bo'yicha sinang — kampaniyani AI boshqaradi.
 
-1. **Configure GoPhish** — set the URL + API key in Settings (or `GOPHISH_URL` /
-   `GOPHISH_API_KEY`). The bundled `gophish` + `mail_server` work out of the box.
-2. **Import the roster** (Simulations → *Employee Roster*): CSV with `email, first_name,
-   last_name, department` (header aliases auto-detected; a plain email-per-line list works).
-3. **Launch:**
-   - **AI Automated** — the model picks a role-aware ATT&CK technique, writes the lure **and
-     the brand-matched credential-capture landing page**, and launches. Flip **Automated
-     scheduled campaigns** on to run every 24h.
-   - **Manual** — upload a CSV (also saved to the roster) or reuse the roster.
-4. **Track engagement** — GoPhish records the **click** (page load) and **data-entry** (form
-   submit), Burp-Collaborator-style, then redirects. The Simulations view shows sent /
-   opened / clicked / submitted, a **department-vulnerability** table, and the exact
-   employees who clicked. Each campaign carries the ATT&CK technique it modelled.
+1. **GoPhishni sozlang** — Settings'да URL + API kalit (yoki `GOPHISH_URL`/`GOPHISH_API_KEY`).
+2. **Rosterni import qiling** (Simulations → *Employee Roster*): `email, first_name,
+   last_name, department` CSV.
+3. **Ishga tushiring:**
+   - **AI Automated** — model rolга mos ATT&CK texnikasini tanlaydi, lure **va** brend-mos
+     credential-ushlovchi landing sahifasini yozadi va yuboradi.
+   - **Manual** — CSV yuklang yoki rosterni qayta ishlating.
+4. **Jalb qilишні kuzating** — GoPhish **bosish** (sahifa ochildi) va **ma'lumot kiritish**
+   (forma yuborildi)ни yozadi, keyin redirect qiladi. Simulations ko'rinishi sent/opened/
+   clicked/submitted, **bo'lim-zaifligi** jadvali va aynan kim bosganини ko'rsatadi.
 
-API: `POST /api/simulations/targets/upload`, `POST /api/simulations/trigger`
-(`mode=AI|Manual`), `GET /api/simulations/results`.
+### AI Awareness hisoboti (PDF)
 
----
-
-## 🧠 Adaptive learning, attachments, reports, copilot
-
-- **Adaptive learning** — marking **Confirmed Phishing** lowers sender/URL-domain reputation
-  and blocklists its IOCs; **Safe** raises reputation. Sim clickers get higher behavioural
-  risk (`POST /api/simulations/sync-behavior`). `GET /api/learning/summary`.
-- **Attachment malware analysis** — magic bytes, dangerous/double extensions, PDF active
-  content, archives, Office macros (`oletools`), SHA-256 blocklist, optional ClamAV
-  (`CLAMAV_TCP`). Malicious attachments force quarantine.
-- **User-reported phishing** — `POST /api/report-phishing`; `GET /api/reports`.
-- **Campaign clustering** — `GET /api/campaigns/clusters` groups related threats.
-- **AI SOC copilot** — grounded Q&A (`POST /api/copilot`) and per-email AI investigation
-  (`GET /api/emails/{id}/investigate`); deterministic fallback when no LLM is reachable.
+Simulations → **AI Awareness Report** → til tanlang (O'zbek/Русский/English) → **Awareness PDF**.
+Lokal LLM quyidagilarni yozadi: eng zaif bo'limlar, qaysi lure/ATT&CK texnikasi odamlarni
+aldaydi va **ustuvorlik bo'yicha awareness-trening tavsiyalari**. API: `GET
+/api/simulations/report/pdf?lang=uz|ru|en`, `GET /api/simulations/awareness`. PDF DejaVu
+Unicode shriftidан foydalanadi — rus (kirill) va o'zbek matni to'g'ri chiqadi.
 
 ---
 
-## 🏗 Platform (tests, metrics, Redis, TLS)
+## 🌐 Ko'p tilli interfeys (i18n)
 
-- **Tests + CI:** `docker compose exec backend python -m pytest` (**40 tests**); GitHub
-  Actions runs compile + tests + compose validation.
-- **Observability:** Prometheus metrics at `/metrics`, `/ready`, `/health`; `LOG_LEVEL`
-  controls structured logs.
-- **Redis:** shared login rate-limiting across replicas (`REDIS_URL`); in-process fallback
-  when unset.
-- **TLS:** `docker compose --profile production up` adds a Caddy reverse proxy (`Caddyfile`)
-  terminating HTTPS in front of the dashboard + API.
+UI uch tilда ishlaydi: **O'zbek (asosiy) · Русский · English**. Birinchi ishga tushishда
+setup oynasi tilni so'raydi; tanlov localStorage'да saqlanadi; yuqori-o'ngdagi tugma
+tillarни almashtiradi. `frontend/i18n.js` render qilinган DOM'ни aniq to'liq-matn moslik
+bo'yicha tarjima qiladi (ma'lumot qiymatlari tegilmaydi) va view qayta render bo'lganда
+MutationObserver orqali qayta qo'llaydi.
 
-The `frontend-react/` directory holds a Vite + React + TS port of the UI; it is kept in the
-repo but **not run** — the shipping dashboard is `frontend/` on `:3000`.
+LLM-yaratган matn (AI sabab, tahdid turi, tavsiya) ham **tanlangan tilда** chiqadi
+(`detection_language` setting / `DETECTION_LANG` env, default `uz`).
 
 ---
 
-## ⚙ Key environment variables
+## 🧠 Adaptiv o'rganish, attachmentlar, hisobotlar, copilot
 
-| Variable | Purpose |
-|----------|---------|
-| `THREATEYE_AUTH_SECRET` | JWT signing key (auto-generated + persisted if unset) |
-| `COOKIE_SECURE` / `COOKIE_SAMESITE` | Session-cookie flags (set `COOKIE_SECURE=true` behind TLS) |
-| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Database credentials |
-| `AI_MODEL` / `OPENAI_API_BASE` / `OPENAI_API_KEY` | LLM provider (default `threateye-phish:1.3` on Ollama) |
-| `GOPHISH_API_KEY` / `GOPHISH_URL` / `GOPHISH_VERIFY_TLS` | GoPhish integration |
-| `SIEM_WEBHOOK_URL` / `SIEM_FORMAT` | SIEM export (also settable in Settings) |
-| `REDIS_URL` / `CLAMAV_TCP` | Shared rate-limit state / optional attachment AV |
+- **Adaptiv o'rganish** — **Confirmed Phishing** belgilash sender/URL-domen obro'sini
+  tushiradi va IOC'larни blocklist qiladi; **Safe** obro'ni ko'taradi.
+- **Attachment zararli dastur tahlili** — magic bytes, xavfli/ikki kengaytma, PDF faol
+  kontent, arxivlar, Office makrolar (`oletools`), SHA-256 blocklist, ixtiyoriy ClamAV.
+- **Foydalanuvchi xabar bergan phishing** — `POST /api/report-phishing`.
+- **AI SOC copilot** — asoslangan Q&A (`POST /api/copilot`) va per-email AI tekshiruvi.
 
 ---
 
-## 🧱 Tech stack
+## 🏗 Platforma (testlar, metrikalar, Redis, TLS, xavfsizlik skanlari)
+
+- **Testlar + CI:** `docker compose exec backend python -m pytest` (**54 test**); GitHub
+  Actions compile + testlar + compose validatsiyasini ishga tushiradi.
+- **Xavfsizlik skanlari (CI):** CodeQL, Bandit (xizmat kodi), Semgrep (tokensiz OSS),
+  osv-scanner (bog'liqliklar). GitHub Security tab'да **0 ochiq alert**.
+- **Observability:** Prometheus metrikalari `/metrics`, `/ready`, `/health`.
+- **Redis:** replikalar bo'ylab umumiy login rate-limit (`REDIS_URL`).
+- **TLS:** `docker compose --profile production up` Caddy reverse proxy (`Caddyfile`) qo'shadi;
+  backend TLS orqasidа HSTS yuboradi.
+
+`frontend-react/` — UI'ning Vite + React + TS porti; repozitoriyда saqlanadi lekin **ishga
+tushirilmaydi** — shipping dashboard = `frontend/` (`:3000`).
+
+---
+
+## ⚙ Asosiy environment o'zgaruvchilari
+
+| O'zgaruvchi | Vazifasi |
+|-------------|----------|
+| `THREATEYE_AUTH_SECRET` | JWT imzolash kaliti (o'rnatilmasa auto-generatsiya + saqlash) |
+| `THREATEYE_ENV` | `production` — insecure defaultларда fail-close |
+| `COOKIE_SECURE` / `COOKIE_SAMESITE` | Sessiya-cookie bayroqlari (TLS orqasidа `true`) |
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | Baza ma'lumotlari |
+| `AI_MODEL` / `OPENAI_API_BASE` / `OPENAI_API_KEY` | LLM provayder (default `threateye-phish:1.3`) |
+| `DETECTION_LANG` | LLM chiqish tili (`uz`/`ru`/`en`, default `uz`) |
+| `EGRESS_GUARD` / `EGRESS_INTERNAL_HOSTS` / `EGRESS_ALLOW_CIDRS` | SSRF egress siyosati |
+| `ALERT_SUSPICIOUS_MIN_SCORE` | Alertга chiqadigan minimal xavf bahosi (default 40) |
+| `GOPHISH_API_KEY` / `GOPHISH_URL` / `GOPHISH_VERIFY_TLS` | GoPhish integratsiyasi |
+| `SIEM_WEBHOOK_URL` / `SIEM_FORMAT` | SIEM eksport (Settings'да ham) |
+| `REDIS_URL` / `CLAMAV_TCP` / `ML_MODEL_PATH` | Rate-limit / AV / ML model yo'li |
+
+---
+
+## 🧱 Texnologik stek
 
 FastAPI · PostgreSQL · Redis · Ollama (`threateye-phish:1.3`, base qwen2.5:3b) ·
-docker-mailserver (Postfix/Dovecot) · GoPhish · Elasticsearch + Kibana · nginx · Caddy.
+scikit-learn (CPU ML) · docker-mailserver (Postfix/Dovecot) · GoPhish · Elasticsearch +
+Kibana · nginx · Caddy.
 
 ---
 
-## 📌 Project goal
+## 📌 Loyiha maqsadi
 
-A realistic, self-hosted email-security lab where AI-driven detection catches AI-crafted
-phishing — with the SOC workflow, phishing simulations, and SIEM integration a blue team
-actually needs. **Authorized use only:** it ships a live phishing framework and mail server;
-run it on an isolated network you control.
+Real, o'zini-o'zi hostlaydigan email-xavfsizlik labi: bu yerda AI boshqaradigan aniqlash
+AI yaratган phishingни ushlaydi — SOC ish oqimi, phishing simulyatsiyalari va SIEM
+integratsiyasi bilan. **Faqat ruxsat etilган foydalanish:** tizim jonli phishing freymvorki
+va pochta serverini o'z ichiga oladi; uni faqat o'zingiz nazorat qiladigan ajratilган
+tarmoqда ishga tushiring.
 
-## 🗺 Roadmap & production readiness
+## 🗺 Roadmap va hujjatlar
 
-ThreatEye today is a **feature-complete lab/MVP**, not yet a production multi-tenant SaaS.
-The honest gap list and the full team backlog to take it to enterprise/SaaS — tenant
-isolation, hardening, async scale, billing/onboarding, compliance, and the AI/ML plan — live
-in **[ROADMAP.md](ROADMAP.md)**. Security posture and known limitations are in
-**[SECURITY.md](SECURITY.md)**.
+- [ROADMAP.md](ROADMAP.md) — labdan korporativ SaaS'ga yo'l, bajarilган va qolган ishlar.
+- [SECURITY.md](SECURITY.md) — xavfsizlik holati, hardening, ma'lum cheklovlar.
+- [MODEL.md](MODEL.md) — model qayerда ishlaydi, qayta qurish, arxivlash, o'z-o'zини yaxshilash.

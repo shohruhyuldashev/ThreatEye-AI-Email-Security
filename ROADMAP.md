@@ -1,220 +1,142 @@
-# ThreatEye — Roadmap: from lab to enterprise SaaS
+# ThreatEye — Roadmap: labdan korporativ SaaS'gacha
 
-This document is the **team backlog** for taking ThreatEye from its current state (a
-feature-complete, self-hosted lab/MVP) to something companies can deploy and that can be
-sold globally as a product/SaaS. It is honest about what is missing and orders the work by
-what blocks real use first.
+Bu hujjat — ThreatEye'ni hozirgi holatidan (to'liq funksional, o'zini-o'zi hostlaydigan
+lab/MVP) kompaniyalar joylashtira oladigan va global sotiladigan mahsulot/SaaS'ga olib
+chiqish uchun **jamoa backlog'i**. Nima yetishmayotganiga halol qaraydi va ishlarni avval
+nima bloklasa, shunга qarab tartiblaydi.
 
-> **Progress (2026-10-11):** ✅ tenant isolation complete (all reads org-scoped, cross-tenant tested) · ✅ settings secrets encrypted at rest (Fernet) · ✅ production hardening (no `--reload`, workers, startup secret guard) · ✅ per-tenant ingestion rate limits · ✅ SSRF egress guard on all admin-controlled outbound targets. Next: admin-password-change on first login + TLS-by-default; then async task queue, signup/billing.
->
-> **Current verdict.** ThreatEye works end-to-end and is a strong foundation, but it is
-> **not yet a production multi-tenant SaaS**. It is safe today only as an **internal tool or
-> a single-organization, authorized pilot** on an isolated network, after basic hardening.
-> The single biggest blocker to selling it as a SaaS is **incomplete tenant isolation**.
-
----
-
-## 1. Where it is today
-
-**Already built and verified**
-- Detection pipeline: deterministic stack (auth / domain-intel / corpus / BEC / injection)
-  **validated on a 1M dataset at 99.9% precision, 86% recall**, plus a specialised local LLM
-  (`threateye-phish:1.3`, semantic-intent + injection defence, two output modes).
-- SOC/Blue-team: cases + SLA/MTTD/MTTR, triage, ATT&CK coverage, threat-intel, Sigma rules,
-  SIEM export (ECS/OCSF → Elasticsearch/Kibana, verified end-to-end), SOAR-style playbooks.
-- Phishing simulation (GoPhish): AI-generated lure + landing page, click/submit tracking.
-- Platform: multi-tenant data model, RBAC (viewer→owner), API-key ingestion, SQL migrations,
-  JWT-cookie sessions + CSRF, Redis rate-limited login, adaptive learning,
-  attachment malware analysis, Prometheus metrics, 40 tests + CI.
-
-**What it is NOT (yet)**
-- Not a hardened production service (dev conveniences still on).
-- Not safely multi-tenant (see §2.1 — cross-tenant reads possible).
-- Not scalable for real mail volume (LLM runs inline, ~1–3 min/email on CPU).
-- Not a commercial product (no signup, billing, onboarding, plans).
+> **Progress (2026-10-12):** ✅ tenant izolyatsiyasi · ✅ settings secretlari shifrlangan (Fernet)
+> · ✅ production hardening (startup secret guard) · ✅ per-tenant rate limitlar · ✅ **SSRF egress
+> guard** · ✅ **majburiy parol o'zgartirish (UI modal)** · ✅ **HSTS TLS orqasidа** · ✅ **barcha
+> dependency CVE'lari yopildi (pin + gophish --no-deps)** · ✅ **GitHub Security tab 0 alert** · ✅
+> **CPU ML klassifikatori** (1M dataset, 3-qatlam) · ✅ **3 tilli UI (UZ/RU/EN) + setup picker** ·
+> ✅ **AI Awareness PDF hisoboti (3 til)** · ✅ **LLM chiqishi o'zbek tilида** · ✅ **homoglif/
+> typosquat floor tuzatildi** (LLM yo'q bo'lsa ham ushlaydi). Keyingi: advanced-evaziya aniqlash,
+> GoPhish LLM template, multi-user SOC, billing.
 
 ---
 
-## 2. Known limitations (current, verified against the code)
+## 1. Hozirgi holat
 
-### 2.1 Security & tenant isolation — **CRITICAL, do first**
-- **Incomplete tenant scoping.** Several read endpoints do **not** filter by
-  `organization_id` — `GET /iocs`, `/cases`, `/audit-log`, `/siem-events`,
-  `/mitre-mappings`. In a multi-tenant deployment one customer can read another customer's
-  data. **This is a hard blocker for any SaaS.**
-- ~~**Admin-authenticated SSRF surface.** `test-imap`, `test-siem`, the URL analyzer and WHOIS
-  reach arbitrary hosts by design; in a hosted setting a tenant admin could probe internal
-  infrastructure.~~ **Mitigated** by `framework/egress.py` (blocks private/loopback/link-local/
-  reserved + the metadata IP; allow-lists bundled service names; `EGRESS_*` env). Note: the
-  URL analyzer/WHOIS do not actually fetch (offline typosquat scoring). Residual: resolve-then-
-  connect leaves a DNS-rebinding TOCTOU window — pinning the resolved IP is a follow-up.
-- **Secrets stored in plaintext in the DB.** SIEM/AI/GoPhish/M365/Google credentials are
-  masked in the API but not encrypted at rest. Needs envelope encryption (KMS/Vault/Fernet).
-- **Dev conveniences shipped on.** `--reload` in the backend Dockerfile (single worker),
-  `COOKIE_SECURE=false`, no TLS by default (Caddy is an optional profile). The `admin/admin`
-  default is now forced to change on first login.
-- **No per-tenant rate limit / quota** on the ingestion API (`POST /v1/emails`) — only login
-  is rate-limited.
+**Qurilган va tekshirilған**
+- Aniqlash pipeline: deterministik stek (auth / domen-razvedka / homoglif / korpus / BEC /
+  injection) **1M datasetда 99.9% precision, 86% recall**, plus maxsus lokal LLM
+  (`threateye-phish:1.3`) va **CPU ML klassifikatori** (til-agnostik, 3-qatlam).
+- SOC/Blue-team: cases + SLA/MTTD/MTTR, triage, ATT&CK coverage, threat-intel, Sigma qoidalar,
+  SIEM eksport (ECS/OCSF → Elasticsearch/Kibana), SOAR-playbooklar.
+- Phishing simulyatsiyasi (GoPhish): AI-yaratған lure + landing sahifa, click/submit kuzatish.
+- **AI Awareness PDF hisoboti** — LLM xulosasi + bo'lim-zaifligi tahlili, 3 tilда.
+- Platforma: multi-tenant, RBAC, API-key ingestion, SQL migratsiyalar, JWT-cookie sessiyalar
+  + CSRF, Redis rate-limit, adaptiv o'rganish, attachment tahlili, Prometheus, **54 test + CI**.
+- **3 tilli UI** (UZ/RU/EN) + setup picker; LLM chiqishi tanlangan tilда.
+- **Xavfsizlik:** SSRF egress guard, majburiy parol (UI modal), HSTS, pin qilinган deps,
+  GitHub Security tab 0 alert (CodeQL/Bandit/Semgrep/osv-scanner yashil).
 
-### 2.2 Scale & performance
-- **LLM runs inline on every request** (`DETECTOR_FAST_PATH=0`), ~1–3 min/email on CPU. No
-  async task queue; heavy work (LLM, WHOIS, attachment scan) is on the request path.
-- **No horizontal scaling proven.** Single backend, SSE stream, no worker pool / autoscaling.
-- **No GPU inference path.** Real throughput needs GPU or a hosted model API.
-
-### 2.3 Detection quality
-- **Validated on a semi-synthetic dataset.** The 1M rows use real domains but templated
-  bodies; real-world mail is messier. Auto-quarantine must be validated on real production
-  mail (with a human-review phase) before it can be trusted.
-- **The 1M dataset is not used to train the model** — it validates the deterministic layer.
-  A real CPU-trainable ML classifier (TF-IDF + logistic regression) on the 1M is designed but
-  **deferred** (see §5).
-- **Uzbek technical depth is limited** in the multilingual 7b variant (base-model constraint).
-
-### 2.4 Product & commercial
-- No self-serve **signup / tenant provisioning / onboarding**.
-- No **billing / subscription / plans / metering**.
-- No **admin/operator console** for the SaaS operator (tenant management, usage, health).
-
-### 2.5 Compliance, data & legal
-- Stores **email content (PII)** with no retention policy, data-residency options, export/delete
-  (GDPR/DSAR), or encryption-at-rest for message bodies.
-- Ships a **live phishing framework (GoPhish) + open mail server** — abuse/legal controls and
-  authorized-use enforcement are required before hosting for others.
-- No SOC 2 / ISO 27001 posture, DPA, audit logging completeness, or pen-test.
-
-### 2.6 Operations & reliability
-- No backups / disaster recovery / restore runbook.
-- No alerting on the metrics, no centralized logging, no on-call/SLO definition.
-- No blue/green or zero-downtime deploy; migrations run at startup (fine for one node, risky
-  for many).
-
-### 2.7 Frontend / UX
-- Single vanilla dashboard (`frontend/`) is the shipping UI; the `frontend-react/` port is
-  kept but not run. A production SaaS wants one maintained SPA with a design system, a11y,
-  and an operator portal separate from the tenant app.
+**Hali EMAS**
+- Hardening qisman: dev qulayliklar (`UVICORN_RELOAD`, lab POSTGRES default) hali yoqilgan.
+- Real pochta hajmiga masshtablanмаган (LLM inline, CPU'да ~1-3 min/xat).
+- Tijorat mahsuloti emas (signup, billing, onboarding, plans yo'q).
+- Advanced evaziya (Unicode/kirill homoglif, zero-width, anchor≠href) hali to'liq qamralмаган.
 
 ---
 
-## 3. Phased roadmap
+## 2. Ma'lum cheklovlar (kodга nisbatан tekshirilган)
 
-### Phase 0 — Production hardening (unlocks a single-org pilot) — ~2–4 weeks
-- [x] Remove `--reload`; run Uvicorn/Gunicorn with multiple workers behind the Caddy/nginx TLS proxy.
-- [x] Force non-default secrets on boot (`THREATEYE_AUTH_SECRET`, DB password); fail closed if defaults.
-- [x] Force an admin-password change on first login; drop `admin/admin` — `must_change_password` flag seeded TRUE on the default admin, `mcp` JWT claim, `require_auth` blocks every non-auth endpoint (403) until rotated.
-- [x] `COOKIE_SECURE=true` + TLS as the default deployment path; HSTS — backend emits HSTS behind TLS (Caddy already did); `THREATEYE_ENV=production` fails closed when `COOKIE_SECURE!=true`.
-- [x] Encrypt settings secrets at rest (Fernet/KMS); key management documented.
-- [x] Egress allow-list for `test-imap`/`test-siem`/AI base-URL/integrations webhooks (kill the open SSRF) — `framework/egress.py`, blocks private/loopback/link-local/reserved + metadata IP, allow-lists bundled service names; `EGRESS_*` env.
-- [ ] Backups + restore runbook for Postgres; metrics alerting.
+### 2.1 Aniqlash sifati — **ustuvor**
+- **Advanced evaziya texnikalari.** Hozirgi homoglif faqat ASCII (`rn`→`m`, `0`→`o`). Kirill
+  harf almashtirish (`mediа-tecth.com`da `а` = U+0430), zero-width belgilar (U+200B),
+  ko'rinmas keyword stuffing (font-size:0), HTML anchor-matni ≠ href domeni, quoted-reply
+  ichida yashirilган link — bular uchun **Unicode/mixed-script, zero-width strip va anchor/href
+  mos-kelmaslik** aniqlash qo'shilishi kerak.
+- **DKIM/SPF-PASS phishing.** Haqiqiy SES/infra orqali yuborilган (auth PASS) phishing uchun
+  faqat semantik + lookalike + content signallari qoladi — bu eng qiyin holat.
+- **Yarim-sintetik validatsiya.** 1M dataset real domenlar, lekin shablon bodylar; real pochta
+  murakkabroq. Auto-karantin real pochtада (shadow rejim bilan) validatsiya qilinishi kerak.
 
-### Phase 1 — True multi-tenant SaaS (unlocks external customers) — ~1–3 months
-- [x] **Complete tenant isolation**: every read/write scoped by `organization_id`, enforced at
-      a query layer (row-level security in Postgres, or a scoped repository), plus automated
-      cross-tenant tests. Audit each endpoint (start with §2.1 list).
-- [ ] Self-serve **signup + tenant provisioning** (isolated schema/row-scoped data, seed defaults).
-- [ ] **Billing** (Stripe): plans, metering (emails scanned, seats, simulations), quotas,
-      usage-based limits on `/v1/emails`.
-- [ ] **Operator console**: manage tenants, suspend/impersonate (audited), usage & health.
-- [x] Per-tenant **rate limits & quotas**; abuse detection.
-- [ ] Async **task queue** (Celery/RQ/Arq) for LLM/WHOIS/attachment; request returns fast,
-      verdict streams in. Optional GPU inference workers or a hosted model API.
+### 2.2 Masshtab va unumdorlik
+- LLM har so'rovда inline (`DETECTOR_FAST_PATH=0`), CPU'да ~1-3 min/xat. Async navbat yo'q.
+- Gorizontal masshtab isbotlanмаган; GPU inference yo'li yo'q.
 
-### Phase 2 — Enterprise-grade — ~2–4 months
-- [ ] **SSO** (SAML/OIDC), SCIM provisioning, MFA for operators/tenant admins.
-- [ ] **Data governance**: retention policies, data residency (region pinning), DSAR
-      export/delete, encryption-at-rest for message bodies, configurable PII redaction.
-- [ ] Native **mail-gateway integrations**: Microsoft 365 / Google Workspace journaling or
-      Graph API pull (beyond IMAP), so it drops into real mail flow.
-- [ ] **Complete audit trail** + tamper-evidence; admin action logging.
-- [ ] Compliance program: SOC 2 Type II / ISO 27001 roadmap, DPA templates, sub-processor list,
-      third-party pen-test, responsible-disclosure/bug-bounty.
-- [ ] Model governance: versioning, eval harness gating, drift monitoring, rollback.
+### 2.3 Mahsulot va tijorat
+- Self-serve signup / tenant provisioning / onboarding yo'q.
+- Billing / subscription / plans / metering yo'q.
+- SaaS operatori uchun admin konsoli yo'q.
+- **Multi-user:** hozir asosan bitta hisob uchun sozlangan; butun kompaniya xodimlarini
+  kuzatadigan to'liq SOC platformaga aylantirish kerak.
 
-### Phase 3 — Scale & global go-to-market — ~ongoing
-- [ ] Horizontal scale: stateless backend + workers, read replicas, autoscaling, multi-region.
-- [ ] Zero-downtime deploys; migrations decoupled from boot; blue/green.
-- [ ] **Localization/i18n** of the UI (the model already handles EN/RU/UZ chat).
-- [ ] Marketplace listings (Microsoft, Google, AWS), partner/reseller program.
-- [ ] Status page, SLAs, 24/7 support tiers, customer success.
-- [ ] Analytics & reporting exports (board-ready security posture reports).
+### 2.4 Compliance, ma'lumot, huquq
+- Email kontenti (PII) saqlanadi — retention/residency/DSAR/body shifri yo'q.
+- Jonli phishing freymvork (GoPhish) + ochiq pochta serveri — abuse/huquqiy nazorat kerak.
+
+### 2.5 Operatsiyalar
+- Backuplar/DR/alerting/centralized logs/SLO yo'q.
 
 ---
 
-## 4. Detailed backlog by area (pick-up list)
+## 3. Bosqichli roadmap
 
-**Security**
-- Row-level security in Postgres per `organization_id`.
-- Secret encryption at rest; rotate keys.
-- SSRF broker / egress allow-list; per-tenant outbound controls.
-- Full CSP on the dashboard; subresource integrity; dependency scanning (SCA) in CI.
-- Session hardening: device binding, revoke-all, suspicious-login alerts.
+### Bosqich 0 — Production hardening ✅ (asosan bajarilди)
+- [x] `--reload`ни olib tashlash; bir nechta worker + Caddy/nginx TLS.
+- [x] Insecure default'larда fail-close (`THREATEYE_ENV=production`).
+- [x] Birinchi loginда majburiy admin-parol (UI modal); `admin/admin` tashlab yuborildi.
+- [x] HSTS (backend TLS orqasidа); `COOKIE_SECURE=true` production yo'li.
+- [x] Settings secretlari shifrlangan (Fernet).
+- [x] SSRF egress allow-list (`test-imap`/`test-siem`/AI base-URL/webhooks).
+- [ ] Postgres backup + restore runbook; metrics alerting.
 
-**Detection & AI/ML** (see §5)
-- [x] CPU ML classifier trained on the 1M dataset and wired as a third detection layer (`scripts/train_ml_classifier.py` → `services/ml_classifier.py`, HashingVectorizer + SGD log-loss, raise-only/fail-open).
-- GPU LoRA fine-tune of the base model on real labeled mail; eval-gated promotion.
-- Continuous evaluation harness + drift/regression dashboard; per-tenant model tuning.
-- Real-mail validation of auto-quarantine with a human-in-the-loop shadow mode first.
+### Bosqich 1 — Haqiqiy multi-tenant SaaS
+- [x] To'liq tenant izolyatsiyasi + cross-tenant testlar.
+- [x] Per-tenant rate limitlar & kvotalar.
+- [ ] Self-serve signup + tenant provisioning.
+- [ ] Billing (Stripe): plans, metering, kvotalar.
+- [ ] Operator konsoli.
+- [ ] Async task queue (Celery/RQ/Arq) — LLM/WHOIS/attachment request yo'lidан chiqadi.
+- [ ] **Multi-user SOC:** butun kompaniya xodimlari hisoblarini (M365/Google journaling yoki
+      IMAP) kuzatadigan platforma.
 
-**Performance**
-- Async queue; batch LLM calls; cache verdicts by content hash.
-- Model serving: vLLM/llama.cpp server, GPU pool, or hosted API fallback.
+### Bosqich 2 — Korporativ daraja
+- [ ] SSO (SAML/OIDC), SCIM, MFA.
+- [ ] Data governance: retention, residency, DSAR, body shifri, PII redaksiya.
+- [ ] Native mail-gateway integratsiyalari (M365 / Google Workspace).
+- [ ] To'liq audit trail + tamper-evidence.
+- [ ] Compliance: SOC 2 / ISO 27001, DPA, pen-test.
 
-**Product / commercial**
-- Signup, onboarding wizard, tenant settings, seat management.
-- Billing, metering, plan gates, invoices, dunning.
-- Operator/admin portal; usage analytics; feature flags.
-
-**Compliance / data**
-- Retention & residency; DSAR; encryption-at-rest for bodies; PII redaction toggles.
-- Audit-log completeness + export; legal (ToS, DPA, AUP for the phishing framework).
-
-**Ops**
-- Backups/DR, alerting, centralized logs, SLOs, on-call, runbooks.
-- IaC (Terraform), CI/CD to staging+prod, secrets manager, container scanning.
-
-**Frontend / UX**
-- Consolidate on one maintained SPA + design system + a11y; separate operator portal.
-- Onboarding, empty states, guided setup, in-app docs.
+### Bosqich 3 — Masshtab va global go-to-market
+- [ ] Gorizontal masshtab, read replicas, autoscaling, multi-region.
+- [x] UI lokalizatsiyasi (UZ/RU/EN) — *bajarilди*.
+- [ ] Marketplace listinglari (Microsoft, Google, AWS).
 
 ---
 
-## 5. AI / ML roadmap (specific)
+## 4. AI / ML roadmap
 
-The current model is **prompt/parameter specialisation** on a 1,210-technique corpus — not
-gradient fine-tuning — which is why it runs on CPU. Paths to make the AI stronger:
-
-1. **CPU ML classifier (near-term, no GPU).** Train a TF-IDF + logistic-regression / gradient-
-   boosting classifier on the 1M labeled dataset (minutes on CPU). Real training on real text;
-   adds an independent signal to the deterministic + LLM layers. **DONE** — HashingVectorizer +
-   SGD(log-loss) in `services/ml_classifier.py`; model trained by `scripts/train_ml_classifier.py`.
-2. **GPU LoRA fine-tune (mid-term).** Fine-tune the base (qwen2.5:7b or larger) on real labeled
-   mail with LoRA on a GPU; import the merged GGUF into Ollama. Gate promotion on the eval
-   harness. Needs a GPU box or cloud (Colab/A100).
-3. **Retrieval augmentation.** Per-tenant threat-intel + historical verdicts as retrieval
-   context, so the model adapts to each customer without retraining.
-4. **Bigger / multilingual base for chat.** Uzbek technical depth needs a larger base or an
-   Uzbek-tuned model; keep the fast 3b as the default scorer, offer 7b+ for the copilot.
-5. **Governed self-improvement** (`scripts/self_improve.py`) is already bounded (analyst-
-   confirmed data only, validation + safety gate, human `--confirm`, version ceiling, kill-
-   switch). Extend with per-tenant candidates and automatic eval gating.
+1. **CPU ML klassifikatori** — ✅ **BAJARILДИ** (`scripts/train_ml_classifier.py` →
+   `services/ml_classifier.py`, HashingVectorizer + SGD log-loss, raise-only/fail-open).
+2. **Advanced-evaziya aniqlash** (keyingi ustuvor) — Unicode/mixed-script homoglif, punycode,
+   zero-width strip, anchor-matni ≠ href, HTML'dagi yashirin kontent.
+3. **GoPhish LLM template generatsiyasi** — LLM GoPhish'да to'g'ridan-to'g'ri template/landing
+   yaratadi; roster bo'yicha avtomatik yuboradi.
+4. **GPU LoRA fine-tune** — real belgilangan pochtada; eval-gated promote.
+5. **Retrieval augmentation** — per-tenant threat-intel + tarixiy verdictlar kontekst sifatida.
+6. **Katta/ko'p tilli baza chat uchun** — o'zbek texnik chuqurligi uchun kattaroq baza.
+7. **Boshqariladigan o'z-o'zини yaxshilash** (`scripts/self_improve.py`) — allaqachon chegaralangan.
 
 ---
 
-## 6. "Definition of done" for a SaaS launch (gate)
+## 5. SaaS launch uchun "definition of done"
 
-Do **not** onboard external paying tenants until all of these are true:
+Tashqi to'lovchi tenantlarni qo'shishdan oldin quyidagilar bajarilishi shart:
 
-- [ ] Tenant isolation complete and covered by automated cross-tenant tests.
-- [ ] Secrets encrypted at rest; no default credentials; TLS enforced; `--reload` removed.
-- [ ] Async processing so a request never blocks on the LLM; per-tenant quotas/rate limits.
-- [ ] Signup, billing, and an operator console exist.
-- [ ] Data retention/residency/DSAR and encryption of message bodies implemented.
-- [ ] Backups + DR tested; alerting + on-call in place.
-- [ ] Independent security review / pen-test passed; SECURITY.md limitations closed.
-- [ ] Auto-quarantine validated on real mail in shadow mode before enforcing.
+- [x] Tenant izolyatsiyasi + cross-tenant testlar.
+- [x] Secretlar shifrlangan; default kredential yo'q; TLS; `--reload` olib tashlangan.
+- [ ] Async ishlov (request hech qachon LLM'да bloklanmaydi); per-tenant kvotalar.
+- [ ] Signup, billing, operator konsoli.
+- [ ] Data retention/residency/DSAR va body shifri.
+- [ ] Backup + DR; alerting + on-call.
+- [ ] Mustaqil xavfsizlik ko'rigi / pen-test.
+- [ ] Auto-karantin real pochtада shadow rejimда validatsiya qilinди.
 
 ---
 
-*Keep this file updated as items land. Prefix issues/PRs with the phase (e.g. `P1: complete
-tenant scoping on /cases`). The near-term critical path is: **tenant isolation → secrets &
-hardening → async queue → billing/onboarding**.*
+*Bu faylni ishlar yakunlanған sari yangilab turing. Yaqin muddatли kritik yo'l:
+**advanced-evaziya aniqlash → GoPhish LLM template → async queue → multi-user → billing**.*
